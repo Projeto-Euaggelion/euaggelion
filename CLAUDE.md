@@ -174,9 +174,49 @@ Componentes iniciais, compartilhados entre Luther (preview) e site via `packages
 - **Papéis** (`profiles.role`): `admin`, `translator`, `reviewer`.
 - **RLS em todas as tabelas.** As permissões do fluxo editorial são aplicadas no banco, não só na
   UI.
-- O site lê versões publicadas por uma view pública, com leitura anônima.
+- O site lê versões publicadas pela view `published_translations` (leitura anônima, só colunas
+  públicas; tabelas internas sem grant para `anon`).
+- `supabase/config.toml` (CLI) já vem com `enable_signup = false`.
+- Primeiro admin, depois do primeiro login/convite (SQL editor):
+  `update public.profiles set role = 'admin' where email = '...';`. Convites podem definir o
+  papel em `app_metadata.role`.
 
-### Schema (alvo)
+### Migrations (`supabase/migrations`)
+
+| Arquivo | Conteúdo |
+|---|---|
+| `…120000_types_and_helpers` | enums e `set_updated_at` |
+| `…120100_profiles_and_auth` | `profiles`, trigger de `auth.users`, `has_role` / `is_admin` / `is_member` |
+| `…120200_content` | `authors`, `works`, `source_versions` / `source_segments` (imutáveis) |
+| `…120300_translations` | `translations`, `translation_versions`, `segments`, `segment_revisions`, `stage_events` |
+| `…120400_comments_and_notifications` | `comment_threads`, `comments`, `notifications` |
+| `…120500_glossary` | `glossary_terms` |
+| `…120600_workflow` | regras do fluxo editorial (triggers), RPCs e `translation_version_overview` |
+| `…120700_public_site` | acesso anônimo ao que foi publicado + view `published_translations` |
+
+**Regras aplicadas no banco:**
+- transições de etapa válidas e o papel exigido para cada uma;
+- aprovação bloqueada por thread aberta na tradução;
+- texto obrigatório para aprovar;
+- segmento aprovado não aceita edição direta;
+- versões publicadas ou arquivadas ficam congeladas;
+- uma versão publicada e no máximo uma em andamento por tradução;
+- o histórico (revisões e `stage_events`) é gravado por trigger;
+- notificações de menção, resposta e thread resolvida (o envio por Mailgun lê `emailed_at is null`).
+
+**RPCs** (o app chama via `supabase.rpc`):
+- `create_source_version(work_id, mdx, segments jsonb, frontmatter?, notes?)`: o app segmenta o MDX
+  e envia os segmentos;
+- `create_translation_version(work_id, language, mode 'copy'|'blank', source_version_id?)`;
+- `apply_ai_translation(segment_id, text, model, tokens?)`: grava a revisão com origem `ai`;
+- `publish_translation_version(version_id, mdx)`: o app reconstrói o MDX e o envia.
+
+**Testes:** `pnpm --filter @euaggelion/db test:db` aplica as migrations num Postgres em memória
+(PGlite, com stub de `auth` e dos papéis do Supabase) e verifica RLS e regras. Rode sempre que
+alterar o schema. Tipos TypeScript: `pnpm --filter @euaggelion/db gen:types`, com o Supabase
+local rodando.
+
+### Schema
 
 ```
 profiles              id (=auth.users.id), name, role
@@ -186,14 +226,16 @@ source_versions       id, work_id, version, mdx, frontmatter
 source_segments       id, source_version_id, position, kind, text, ast_path
 translations          id, work_id, language, published_version_id   UNIQUE(work_id, language)
 translation_versions  id, translation_id, version, source_version_id, based_on_version_id,
-                      status, credits, created_by, published_at
+                      status, credits, translator_id, reviewer_id, mdx (publicado),
+                      created_by, published_at
 segments              id, translation_version_id, source_segment_id, text, stage, updated_by
 segment_revisions     id, segment_id, text, origin, model, tokens, author_id
 comment_threads       id, translation_version_id, segment_id, side (source|target), quote,
-                      prefix, suffix, start_offset, end_offset, status (open|resolved),
+                      prefix, suffix, start_offset, end_offset, detached, status (open|resolved),
                       created_by, resolved_by, resolved_at
 comments              id, thread_id, author_id, body, mentions[], created_at, edited_at
-notifications         id, user_id, kind, thread_id, comment_id, read_at, emailed_at
+notifications         id, user_id, kind (mention|reply|thread_resolved), actor_id, thread_id,
+                      comment_id, read_at, emailed_at
 glossary_terms        id, language, source_term, target_term, notes
 stage_events          id, segment_id, from_stage, to_stage, actor_id
 ```
@@ -225,7 +267,7 @@ O CRUD usa Server Actions. Route handlers ficam só para streaming, upload e exp
 ## Roadmap
 
 1. ~~Setup do monorepo + shadcn + UI compartilhada (shell e layout do editor)~~
-2. Schema, RLS e Auth
+2. ~~Schema e RLS (migrations + testes)~~ · Auth no app (login, middleware, `/admin/users`) pendente
 3. Parser/segmentador MDX, com testes
 4. CRUD de obras + importação (incluindo o acervo de `content/`)
 5. Editor + DeepSeek
