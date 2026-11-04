@@ -11,3 +11,15 @@ import type { LutherRole } from "@euaggelion/db/apps"
 export function requireLuther(roles?: LutherRole[]) {
   return requireAppAccess("luther", { roles })
 }
+
+/**
+ * Permissões da conta atual no Luther, já reduzidas a booleanos para a UI decidir o que mostrar.
+ * Cada ação revalida o papel no servidor; isto só esconde botões que não funcionariam.
+ */
+export async function getLutherPermissions() {
+  const { role } = await requireLuther()
+  return {
+    canManageCatalog: role === "admin",
+    canStartTranslation: role === "admin" || role === "reviewer",
+  }
+}

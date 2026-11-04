@@ -34,6 +34,7 @@ packages/ui      UI compartilhada: shadcn/ui, tema, tokens e o shell dos apps
 packages/auth    Autenticação/autorização (somente servidor): clientes Supabase, proxy, DAL
 packages/mdx     Convenções MDX: schema do frontmatter, parser/segmentador, componentes
 packages/db      Registro dos apps (ids, caminhos, acesso), tipos gerados do Supabase
+packages/importer Conversão do acervo legado (content/) para MDX e importação no Supabase
 supabase/        Migrations (Supabase CLI)
 content/         Acervo legado de textos-fonte (ver abaixo)
 ```
@@ -109,6 +110,22 @@ verbetes de dicionário e algumas traduções pt-BR. São arquivos `.md` em text
 de linha fixas e cabeçalhos informais. **Não é MDX válido nem segue o schema abaixo.** Serve de
 material de importação para o Luther: a importação normaliza cada texto para MDX e cria a obra no
 Supabase. A fonte da verdade passa a ser o Supabase.
+
+**Importação (`packages/importer`)**, em duas fases:
+1. `pnpm import:convert [--author <pasta>] [--limit N]` converte `content/sermons/en-US/<pasta>/*.md`
+   para `content/mdx/sermons/<autor>/<slug>.mdx` e grava `report.json`.
+   - Faz: cabeçalho → frontmatter (título, fonte, data, copyright → `credits`); remove o bloco de
+     autoria; desfaz as quebras de linha; remove ênfases desbalanceadas; escapa `{ } <`.
+   - É heurística. **Revise os arquivos no git antes de aplicar**; o relatório lista avisos
+     (sem data, HTML bruto, aviso de copyright).
+2. `pnpm import:apply [--author <slug>] [--dry-run]` cria autores e obras (rascunho) via
+   `create_work`.
+   - Usa `NEXT_PUBLIC_SUPABASE_URL` + `SUPABASE_SECRET_KEY` do `.env` da raiz.
+   - É idempotente: pula obras cujo autor+slug já existe.
+- Autores do acervo e o tipo padrão por autor ficam em `src/authors.ts` e `src/cli.ts`.
+- Ainda não converte o comentário de Kretzmann, o dicionário nem as traduções pt-BR existentes.
+- ~50 sermões de Spurgeon trazem aviso de copyright de edição moderna (Tony Capoccia, 2000):
+  confirme os direitos antes de publicar.
 
 ## Modelo de domínio
 
@@ -187,8 +204,8 @@ O status da versão é derivado dos segmentos. Toda transição fica registrada 
   - Histórico do segmento.
 - **Notificações** de @menções e respostas: no app (sino) e por **e-mail via Mailgun**.
 
-O layout atual (`/works/[workId]/[lang]/v/[version]`) usa dados de demonstração
-(`apps/luther/src/lib/demo`), que serão trocados pelo Supabase na etapa 2.
+O editor (`/works/[workId]/[lang]/v/[version]`) ainda usa dados de demonstração
+(`apps/luther/src/lib/demo`); passa a ler o Supabase na etapa 5.
 
 ## MDX
 
@@ -269,6 +286,7 @@ pré-visualização (etapa 7).
 | `…120600_workflow` | regras do fluxo editorial (triggers), RPCs e `translation_version_overview` |
 | `…120700_public_site` | acesso anônimo ao que foi publicado + view `published_translations` |
 | `…120800_segment_kind_attribute` | `segment_kind` ganha `attribute` (atributos traduzíveis) |
+| `…120900_works_management` | `create_work` (obra + v1 do original, atômico); nova versão do original sincroniza título/descrição da obra |
 
 **Regras aplicadas no banco:**
 - transições de etapa válidas e o papel exigido para cada uma;
@@ -281,6 +299,8 @@ pré-visualização (etapa 7).
 - notificações de menção, resposta e thread resolvida (o envio por Mailgun lê `emailed_at is null`).
 
 **RPCs** (o app chama via `supabase.rpc`):
+- `create_work(author_id, type, slug, mdx, segments, frontmatter, date_text?, date_precision?, source?, credits?)`:
+  cria a obra (rascunho) e a v1 do original numa transação;
 - `create_source_version(work_id, mdx, segments jsonb, frontmatter?, notes?)`: o app segmenta o MDX
   e envia os segmentos;
 - `create_translation_version(work_id, language, mode 'copy'|'blank', source_version_id?)`;
@@ -289,8 +309,9 @@ pré-visualização (etapa 7).
 
 **Testes:** `pnpm --filter @euaggelion/db test:db` aplica as migrations num Postgres em memória
 (PGlite, com stub de `auth` e dos papéis do Supabase) e verifica RLS e regras. Rode sempre que
-alterar o schema. Tipos TypeScript: `pnpm --filter @euaggelion/db gen:types`, com o Supabase
-local rodando.
+alterar o schema. Tipos TypeScript (`packages/db/src/database.types.ts`, importados de
+`@euaggelion/db/types`): `pnpm --filter @euaggelion/db gen:types`, com o Supabase local rodando.
+Regere sempre que mudar o schema. Os clientes de `@euaggelion/auth/server` já são tipados.
 
 ### Schema
 
@@ -324,8 +345,10 @@ Os caminhos abaixo são relativos ao `basePath` `/luther`. O `/login` é o da zo
 ```
 /                                          Dashboard: minhas tarefas
 /authors, /authors/[slug]
-/works, /works/new                         Importar/colar .mdx → pré-visualizar segmentação
-/works/[workId]                            Metadados, versões da fonte, traduções por idioma
+/works, /works/new                         Lista (busca, filtros, paginação) · importar .mdx com pré-visualização
+/works/[workId]                            Metadados, traduções por idioma (progresso), versões do original
+/works/[workId]/source/new                 Nova versão do original (admin)
+/works/[workId]/source/[version]           Segmentos e MDX de uma versão do original
 /works/[workId]/[lang]                     Versões da tradução
 /works/[workId]/[lang]/v/[version]         Editor lado a lado (fonte | tradução | comentários)
 /works/[workId]/[lang]/v/[version]/review
@@ -336,11 +359,25 @@ Os caminhos abaixo são relativos ao `basePath` `/luther`. O `/login` é o da zo
 /settings
 
 POST /api/translate                        Segmento(s) → DeepSeek (SSE)
-POST /api/works/parse                      MDX → segmentos
 GET  /api/translations/[id]/export         Reconstrução do .mdx
 ```
 
 O CRUD usa Server Actions. Route handlers ficam só para streaming, upload e exportação.
+
+Convenções do app (etapa 4):
+- **Leituras** em `src/lib/data/*` (`server-only`), com o cliente da sessão: a RLS se aplica.
+  - O PostgREST devolve no máximo 1000 linhas: listas grandes paginam com `.range()`.
+- **Server Actions** em `actions.ts` de cada rota.
+  - Cada uma chama `requireLuther(roles)` e valida a entrada com zod.
+  - Devolvem `ActionState` (`error`, `fieldErrors`, `success`); erros do Postgres passam por
+    `databaseErrorMessage`.
+- A visibilidade de botões usa `getLutherPermissions()`, que dá booleanos calculados no servidor
+  (`canManageCatalog`, `canStartTranslation`).
+- **Formulários** usam `useFormAction` (`src/lib/use-form-action.ts`), não `<form action>`
+  direto: o React 19 limparia os campos quando o servidor recusa os dados.
+- **Páginas:** o shell é estático e os dados ficam num componente async dentro de `<Suspense>`.
+  - Ids da URL passam por `isUuid` antes de ir ao banco.
+  - Links internos usam `next/link` (respeitam o basePath); `BreadcrumbLink` vai com `asChild`.
 
 ## Roadmap
 
@@ -348,7 +385,7 @@ O CRUD usa Server Actions. Route handlers ficam só para streaming, upload e exp
 2. ~~Schema e RLS (migrations + testes); login único, multi-zones e autorização no servidor~~
    (pendente: `/admin/users` para gerenciar a equipe)
 3. ~~Parser/segmentador MDX, com testes~~
-4. CRUD de obras + importação (incluindo o acervo de `content/`)
+4. ~~CRUD de obras + importação (incluindo o acervo de `content/`)~~
 5. Editor + DeepSeek
 6. Fluxo de etapas + comentários
 7. Versionamento, publicação e exportação

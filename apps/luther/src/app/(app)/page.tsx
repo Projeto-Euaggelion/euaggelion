@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { LibraryIcon, UsersIcon } from "lucide-react"
 
 import { Button } from "@euaggelion/ui/components/button"
 import { AppHeader } from "@euaggelion/ui/shell/app-header"
@@ -12,12 +13,21 @@ export default function DashboardPage() {
       <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
         <h1 className="text-2xl font-semibold tracking-tight">Luther</h1>
         <p className="max-w-md text-sm text-muted-foreground">
-          O dashboard de tarefas chega com o CRUD de obras (etapa 4). Por enquanto, veja o layout do editor com dados de
-          demonstração.
+          O painel de tarefas (segmentos para traduzir e revisar, menções) chega com o fluxo de etapas. Por enquanto,
+          comece pelas obras.
         </p>
-        <Button asChild>
-          <Link href="/works/spurgeon-0001/pt-BR/v/1">Abrir editor de exemplo</Link>
-        </Button>
+        <div className="flex gap-2">
+          <Button asChild>
+            <Link href="/works">
+              <LibraryIcon /> Obras
+            </Link>
+          </Button>
+          <Button variant="outline" asChild>
+            <Link href="/authors">
+              <UsersIcon /> Autores
+            </Link>
+          </Button>
+        </div>
       </div>
     </div>
   )

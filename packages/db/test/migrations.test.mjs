@@ -161,5 +161,25 @@ v2segs[0].stage === 'review' && v2segs[0].text && v2segs[1].stage === 'original'
 const pub2 = (await as('anon', `select version from public.published_translations`)).rows
 pub2.length === 1 && pub2[0].version === 1 ? ok('site continua na v1 enquanto a v2 está em andamento') : bad('pub após v2', JSON.stringify(pub2))
 
+// --- Gestão de obras -----------------------------------------------------------
+console.log('\nGestão de obras')
+const fm = JSON.stringify({ title: 'All of Grace', description: 'An earnest word.', author: 'c-h-spurgeon', type: 'article' })
+const wsegs = JSON.stringify([{ position: 0, kind: 'title', text: 'All of Grace', ast_path: 'frontmatter.title' }, { position: 1, kind: 'paragraph', text: 'Body.', ast_path: '1' }])
+await expectErr('tradutor não cria obra', 'tr', `select public.create_work('${author}', 'article', 'all-of-grace', '# x', '${wsegs}'::jsonb, '${fm}'::jsonb)`, 'administradores')
+const cw = (await expectOk('admin cria obra + versão 1 numa transação', 'admin', `select public.create_work('${author}', 'article', 'all-of-grace', '---\\ntitle: All of Grace\\n---\\n\\nBody.', '${wsegs}'::jsonb, '${fm}'::jsonb, '1886', 'year', 'Spurgeon Archive', 'Public domain') as id`)).rows[0].id
+const cwRow = (await db.query(`select w.title, w.description, w.date_text, w.status, (select count(*)::int from public.source_versions sv where sv.work_id = w.id) as versions, (select count(*)::int from public.source_segments ss join public.source_versions sv on sv.id = ss.source_version_id where sv.work_id = w.id) as segs from public.works w where w.id = $1`, [cw])).rows[0]
+cwRow.title === 'All of Grace' && cwRow.description === 'An earnest word.' && cwRow.status === 'draft' && cwRow.versions === 1 && cwRow.segs === 2
+  ? ok('obra criada como rascunho, com título/descrição do frontmatter e 2 segmentos') : bad('create_work', JSON.stringify(cwRow))
+await expectErr('slug repetido para o mesmo autor', 'admin', `select public.create_work('${author}', 'article', 'all-of-grace', '# x', '${wsegs}'::jsonb, '${fm}'::jsonb)`, 'works_author_id_slug_key')
+const before = (await db.query(`select count(*)::int as n from public.works`)).rows[0].n
+await expectErr('falha nos segmentos desfaz a obra (atômico)', 'admin', `select public.create_work('${author}', 'article', 'sem-segmentos', '# x', '[]'::jsonb, '${fm}'::jsonb)`, 'ao menos um segmento')
+const after = (await db.query(`select count(*)::int as n from public.works`)).rows[0].n
+before === after ? ok('nenhuma obra órfã após a falha') : bad('obra órfã', `${before} → ${after}`)
+const fm2 = JSON.stringify({ title: 'All of Grace (revised)' })
+await expectOk('nova versão do original', 'admin', `select public.create_source_version('${cw}', '# y', '${wsegs}'::jsonb, '${fm2}'::jsonb, 'revisão')`)
+const cw2 = (await db.query(`select title, description from public.works where id=$1`, [cw])).rows[0]
+cw2.title === 'All of Grace (revised)' && cw2.description === 'An earnest word.'
+  ? ok('nova versão atualiza o título e mantém a descrição ausente no frontmatter') : bad('sync', JSON.stringify(cw2))
+
 console.log(`\n${pass} ok, ${fail} falha(s)`)
 process.exit(fail ? 1 : 0)

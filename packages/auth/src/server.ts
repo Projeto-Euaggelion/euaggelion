@@ -5,6 +5,8 @@ import { createClient } from "@supabase/supabase-js"
 import { cookies } from "next/headers"
 import { connection } from "next/server"
 
+import type { Database } from "@euaggelion/db/types"
+
 import { authEnv } from "./env"
 
 /**
@@ -15,7 +17,7 @@ export async function createSupabaseServerClient() {
   // A sessão é sempre de tempo de requisição (o cliente usa Date.now() ao validar o token)
   await connection()
   const cookieStore = await cookies()
-  return createServerClient(authEnv.supabaseUrl(), authEnv.publishableKey(), {
+  return createServerClient<Database>(authEnv.supabaseUrl(), authEnv.publishableKey(), {
     cookies: {
       getAll: () => cookieStore.getAll(),
       setAll: (toSet) => {
@@ -34,7 +36,7 @@ export async function createSupabaseServerClient() {
  * e administração no servidor, depois de identificar o usuário.
  */
 export function createSupabaseAdminClient() {
-  return createClient(authEnv.supabaseUrl(), authEnv.secretKey(), {
+  return createClient<Database>(authEnv.supabaseUrl(), authEnv.secretKey(), {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
   })
 }
