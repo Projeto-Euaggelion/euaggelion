@@ -14,7 +14,7 @@
 -- -----------------------------------------------------------------------------
 
 -- Threads abertas na tradução de um segmento (bloqueiam a aprovação)
-create function public.open_target_threads(p_segment_id uuid)
+create function private.open_target_threads(p_segment_id uuid)
 returns integer
 language sql
 stable
@@ -27,8 +27,8 @@ as $$
 $$;
 
 -- Papel exigido para a transição; null = transição inválida
-create function public.stage_transition_roles(p_from public.segment_stage, p_to public.segment_stage)
-returns public.app_role[]
+create function private.stage_transition_roles(p_from public.segment_stage, p_to public.segment_stage)
+returns public.luther_role[]
 language sql
 immutable
 set search_path = ''
@@ -44,10 +44,10 @@ as $$
     when p_from = 'discussion'  and p_to = 'review'      then array['admin','reviewer']
     when p_from = 'approved'    and p_to = 'review'      then array['admin','reviewer']   -- reabrir
     else null
-  end::public.app_role[];
+  end::public.luther_role[];
 $$;
 
-create function public.version_is_editable(p_version_id uuid)
+create function private.version_is_editable(p_version_id uuid)
 returns boolean
 language sql
 stable
@@ -70,7 +70,7 @@ language plpgsql
 set search_path = ''
 as $$
 declare
-  v_roles public.app_role[];
+  v_roles public.luther_role[];
   v_uid uuid := auth.uid();
 begin
   if new.translation_version_id is distinct from old.translation_version_id
@@ -84,7 +84,7 @@ begin
     return new;
   end if;
 
-  if not public.version_is_editable(new.translation_version_id) then
+  if not private.version_is_editable(new.translation_version_id) then
     raise exception 'Esta versão não está em andamento; crie uma nova versão para alterá-la.'
       using errcode = '42501';
   end if;
@@ -104,11 +104,11 @@ begin
 
   -- Mudança de etapa
   if new.stage is distinct from old.stage then
-    v_roles := public.stage_transition_roles(old.stage, new.stage);
+    v_roles := private.stage_transition_roles(old.stage, new.stage);
     if v_roles is null then
       raise exception 'Transição de etapa inválida: % → %.', old.stage, new.stage using errcode = '22023';
     end if;
-    if v_uid is not null and not public.has_role(variadic v_roles) then
+    if v_uid is not null and not private.luther_has_role(variadic v_roles) then
       raise exception 'Seu papel não permite mover o segmento de % para %.', old.stage, new.stage
         using errcode = '42501';
     end if;
@@ -116,7 +116,7 @@ begin
       if length(trim(new.text)) = 0 then
         raise exception 'Não é possível aprovar um segmento sem tradução.' using errcode = '22023';
       end if;
-      if public.open_target_threads(new.id) > 0 then
+      if private.open_target_threads(new.id) > 0 then
         raise exception 'Resolva as threads abertas na tradução antes de aprovar o segmento.'
           using errcode = '22023';
       end if;
@@ -182,7 +182,7 @@ language plpgsql
 set search_path = ''
 as $$
 begin
-  if not public.version_is_editable(new.translation_version_id) then
+  if not private.version_is_editable(new.translation_version_id) then
     raise exception 'Só é possível comentar em versões em andamento.' using errcode = '42501';
   end if;
   new.created_by := coalesce(auth.uid(), new.created_by);
@@ -217,7 +217,7 @@ begin
     if new.status = 'resolved' then
       -- quem abriu, revisores e admins resolvem
       if v_uid is not null and v_uid is distinct from old.created_by
-         and not public.has_role('admin', 'reviewer') then
+         and not private.luther_has_role('admin', 'reviewer') then
         raise exception 'Apenas quem abriu a thread, revisores ou admins podem resolvê-la.'
           using errcode = '42501';
       end if;
@@ -290,7 +290,7 @@ begin
   insert into public.notifications (user_id, kind, actor_id, thread_id, comment_id)
   select p.id, 'mention', new.author_id, new.thread_id, new.id
     from public.profiles p
-   where p.id = any (new.mentions) and p.active;
+   where p.id = any (new.mentions) and private.is_active_luther_member(p.id);
 
   -- Respostas: participantes da thread (quem abriu + quem comentou), exceto autor e mencionados
   insert into public.notifications (user_id, kind, actor_id, thread_id, comment_id)
@@ -300,7 +300,7 @@ begin
       union
       select c.author_id from public.comments c where c.thread_id = new.thread_id and c.id <> new.id
     ) parts
-    join public.profiles p on p.id = parts.participant and p.active
+    join public.profiles p on p.id = parts.participant and private.is_active_luther_member(p.id)
    where participant is not null
      and participant is distinct from new.author_id
      and not (participant = any (new.mentions));
@@ -327,7 +327,7 @@ begin
       union
       select c.author_id from public.comments c where c.thread_id = new.id
     ) parts
-    join public.profiles p on p.id = parts.participant and p.active
+    join public.profiles p on p.id = parts.participant and private.is_active_luther_member(p.id)
    where participant is not null and participant is distinct from new.resolved_by;
   return null;
 end;
@@ -406,7 +406,7 @@ declare
   v_id uuid;
   v_version integer;
 begin
-  if auth.uid() is not null and not public.is_admin() then
+  if auth.uid() is not null and not private.is_luther_admin() then
     raise exception 'Apenas administradores criam versões do original.' using errcode = '42501';
   end if;
   if jsonb_typeof(p_segments) <> 'array' or jsonb_array_length(p_segments) = 0 then
@@ -457,14 +457,14 @@ declare
   v_version integer;
   v_id uuid;
 begin
-  if auth.uid() is not null and not public.has_role('admin', 'reviewer') then
+  if auth.uid() is not null and not private.luther_has_role('admin', 'reviewer') then
     raise exception 'Apenas administradores e revisores criam versões de tradução.' using errcode = '42501';
   end if;
   if p_mode not in ('copy', 'blank') then
     raise exception 'Modo inválido: use copy ou blank.' using errcode = '22023';
   end if;
 
-  v_source_version_id := coalesce(p_source_version_id, public.latest_source_version_id(p_work_id));
+  v_source_version_id := coalesce(p_source_version_id, private.latest_source_version_id(p_work_id));
   if v_source_version_id is null
      or not exists (select 1 from public.source_versions where id = v_source_version_id and work_id = p_work_id) then
     raise exception 'A obra não tem essa versão do original.' using errcode = '22023';
@@ -567,7 +567,7 @@ declare
   v_pending integer;
   v_threads integer;
 begin
-  if auth.uid() is not null and not public.has_role('admin', 'reviewer') then
+  if auth.uid() is not null and not private.luther_has_role('admin', 'reviewer') then
     raise exception 'Apenas administradores e revisores publicam traduções.' using errcode = '42501';
   end if;
   if p_mdx is null or length(trim(p_mdx)) = 0 then
@@ -649,7 +649,7 @@ select
   coalesce(seg.approved, 0)     as segments_approved,
   coalesce(thr.open_target, 0)  as open_target_threads,
   coalesce(thr.open_source, 0)  as open_source_threads,
-  tv.source_version_id is distinct from public.latest_source_version_id(t.work_id) as is_outdated,
+  tv.source_version_id is distinct from private.latest_source_version_id(t.work_id) as is_outdated,
   (tv.status = 'in_progress'
      and coalesce(seg.total, 0) > 0
      and coalesce(seg.approved, 0) = coalesce(seg.total, 0)

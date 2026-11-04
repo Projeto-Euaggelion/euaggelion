@@ -27,15 +27,59 @@ textos de autores clássicos do cristianismo (sermões, artigos e comentários).
 ## Estrutura do monorepo
 
 ```
-apps/luther      Webapp de tradução/revisão (interno, autenticado)
-apps/site        Site público (futuro): lê apenas versões publicadas
-apps/…           Demais apps (comentário, leitor, cronologia, atlas…), todos sobre packages/ui
+apps/site        Zona principal (/): site público, /login único, rotas de auth, /sem-acesso
+apps/luther      Zona /luther: tradução/revisão (só para a equipe)
+apps/…           Demais apps (comentário, leitor, cronologia, atlas…), cada um na sua zona
 packages/ui      UI compartilhada: shadcn/ui, tema, tokens e o shell dos apps
+packages/auth    Autenticação/autorização (somente servidor): clientes Supabase, proxy, DAL
 packages/mdx     Convenções MDX: schema do frontmatter, parser/segmentador, componentes
-packages/db      Tipos gerados do Supabase + queries compartilhadas
+packages/db      Registro dos apps (ids, caminhos, acesso), tipos gerados do Supabase
 supabase/        Migrations (Supabase CLI)
 content/         Acervo legado de textos-fonte (ver abaixo)
 ```
+
+## Aplicações, login único e autorização
+
+**Multi-zones (Next.js):** todos os apps são servidos no **mesmo domínio**, cada um no seu
+caminho.
+- `apps/site` é a zona principal. Ela serve `/`, `/login`, `/auth/callback`, `/auth/signout` e
+  `/sem-acesso`, e encaminha os caminhos das outras zonas por `rewrites` (ex.: `/luther/*` →
+  `LUTHER_ORIGIN`).
+- Cada app roda com `basePath` igual ao seu caminho (ex.: `basePath: "/luther"`). Em dev: site na
+  porta 3000 e Luther na 3001; acesse sempre pela 3000.
+- Links entre zonas usam `<a>` (navegação "hard"), não `<Link>`.
+- Ids, caminhos e regra de acesso de cada app ficam em `@euaggelion/db/apps`
+  (`EUAGGELION_APP_CONFIG`), espelhando o enum `public.euaggelion_app`.
+
+**Login único:** uma conta (Supabase Auth) vale para todo o Euaggelion. Como o domínio é um só, o
+cookie de sessão também é. O logout (`POST /auth/signout`) encerra a sessão em todos os apps.
+
+**Acesso por app:** `app_memberships` (usuário × app × papel). Uma mesma conta pode ter acesso a
+um app e não a outro. Apps `public` são abertos; apps `members` (ex.: Luther) exigem membership
+ativa. Os papéis do Luther são `admin`, `translator` e `reviewer`.
+
+**As permissões são conferidas exclusivamente no servidor:**
+- `proxy.ts` de cada zona: renova a sessão. No Luther, também exige login (checagem otimista) e
+  redireciona para `/login?next=…`.
+- DAL em `@euaggelion/auth/access` (`server-only`):
+  - `getAccount()`;
+  - `getAppRole(app)`;
+  - `getAccessibleApps()`;
+  - `requireAppAccess(app, { roles })`: sem login vai para `/login`, sem acesso vai para
+    `/sem-acesso?app=…`.
+
+  No Luther, use `requireLuther(roles?)` em layouts, páginas, **cada** Server Action e cada
+  Route Handler.
+- `app_memberships` **não tem grants para `anon`/`authenticated`**: só o servidor a lê, com
+  `SUPABASE_SECRET_KEY`.
+- Os helpers de papel usados nas policies ficam no schema `private`, fora da API (PostgREST).
+- **O client nunca recebe papéis nem regras.** Ele recebe só dados de exibição (nome, e-mail) e a
+  lista de apps que pode abrir. Quando a UI precisa de algo como "pode aprovar", o servidor
+  calcula um booleano e revalida na ação.
+- Com Cache Components, a leitura da sessão fica dentro de `<Suspense>`, e
+  `createSupabaseServerClient()` chama `connection()`.
+- O parâmetro `next` do login passa por `safeNextPath` (só caminhos do próprio domínio; evita open
+  redirect).
 
 ## UI compartilhada (`packages/ui`)
 
@@ -50,13 +94,13 @@ content/         Acervo legado de textos-fonte (ver abaixo)
     disponível pelo menu do usuário.
   - Fonte: Inter.
 - **Shell** (`@euaggelion/ui/shell/*`), igual em todos os apps:
-  - **Trilho externo**: seletor das aplicações do Euaggelion, definido em `shell/apps.ts`
-    (`EUAGGELION_APPS`). As URLs vêm de `NEXT_PUBLIC_APP_URL_<ID>`. Apps sem URL aparecem como
-    "em breve".
+  - **Trilho externo**: seletor das aplicações do Euaggelion (`shell/apps.ts`: nome, ícone,
+    caminho). Mostra apenas os apps recebidos em `apps`, uma lista calculada no servidor por
+    `getAccessibleApps()`. Apps com `status: "soon"` aparecem desabilitados.
   - **Sidebar interna**: navegação e funções do app aberto. Cada app fornece a sua (ex.:
     `apps/luther/src/components/luther-sidebar.tsx`).
-  - `AppShell` (`currentApp`, `sidebar`, `user`) compõe os dois níveis. `AppHeader` é o cabeçalho
-    padrão da área de conteúdo. `NavUser` é o menu do usuário (perfil, notificações, tema, sair).
+  - `AppShell` (`currentApp`, `sidebar`, `user` = { name, email }, `apps`) compõe os dois níveis. `AppHeader` é o cabeçalho
+    padrão da área de conteúdo. `NavUser` é o menu do usuário (perfil, notificações, tema, sair → `/auth/signout`).
 
 ### `content/` (acervo legado)
 
@@ -168,25 +212,26 @@ Componentes iniciais, compartilhados entre Luther (preview) e site via `packages
 
 ## Supabase
 
-- **Auth:** e-mail/senha ou magic link. **Não há cadastro público**: colaboradores são criados
-  manualmente (painel do Supabase ou `/admin/users`, via `auth.admin.inviteUserByEmail` no
-  servidor).
-- **Papéis** (`profiles.role`): `admin`, `translator`, `reviewer`.
+- **Auth:** e-mail/senha ou magic link (`shouldCreateUser: false`). **Não há cadastro público**:
+  as contas são criadas manualmente (painel do Supabase ou `auth.admin.inviteUserByEmail` no
+  servidor). O convite pode trazer `app_metadata.apps`, por exemplo
+  `{ "luther": "translator" }`.
+- **Perfil global** (`profiles`) + **acesso por app** (`app_memberships`, ver "Aplicações, login
+  único e autorização").
 - **RLS em todas as tabelas.** As permissões do fluxo editorial são aplicadas no banco, não só na
   UI.
 - O site lê versões publicadas pela view `published_translations` (leitura anônima, só colunas
   públicas; tabelas internas sem grant para `anon`).
 - `supabase/config.toml` (CLI) já vem com `enable_signup = false`.
-- Primeiro admin, depois do primeiro login/convite (SQL editor):
-  `update public.profiles set role = 'admin' where email = '...';`. Convites podem definir o
-  papel em `app_metadata.role`.
+- Primeiro admin do Luther (SQL editor), depois de criar a conta:
+  `insert into public.app_memberships (user_id, app, role) select id, 'luther', 'admin' from public.profiles where email = '...';`
 
 ### Migrations (`supabase/migrations`)
 
 | Arquivo | Conteúdo |
 |---|---|
 | `…120000_types_and_helpers` | enums e `set_updated_at` |
-| `…120100_profiles_and_auth` | `profiles`, trigger de `auth.users`, `has_role` / `is_admin` / `is_member` |
+| `…120100_profiles_and_auth` | `profiles`, `app_memberships`, trigger de `auth.users`, `private.luther_has_role` / `is_luther_admin` / `is_luther_member` |
 | `…120200_content` | `authors`, `works`, `source_versions` / `source_segments` (imutáveis) |
 | `…120300_translations` | `translations`, `translation_versions`, `segments`, `segment_revisions`, `stage_events` |
 | `…120400_comments_and_notifications` | `comment_threads`, `comments`, `notifications` |
@@ -219,7 +264,8 @@ local rodando.
 ### Schema
 
 ```
-profiles              id (=auth.users.id), name, role
+profiles              id (=auth.users.id), name, email
+app_memberships       user_id, app (euaggelion_app), role, active, granted_by   PK(user_id, app)
 authors               id, name, slug, bio, era
 works                 id, author_id, type, slug, date_text, date_precision, source, credits, status
 source_versions       id, work_id, version, mdx, frontmatter
@@ -242,8 +288,9 @@ stage_events          id, segment_id, from_stage, to_stage, actor_id
 
 ## Rotas do Luther
 
+Os caminhos abaixo são relativos ao `basePath` `/luther`. O `/login` é o da zona principal.
+
 ```
-/login
 /                                          Dashboard: minhas tarefas
 /authors, /authors/[slug]
 /works, /works/new                         Importar/colar .mdx → pré-visualizar segmentação
@@ -254,7 +301,7 @@ stage_events          id, segment_id, from_stage, to_stage, actor_id
 /works/[workId]/[lang]/v/[version]/preview
 /works/[workId]/[lang]/compare?a=&b=       Diff entre versões
 /glossary
-/admin/users
+/admin/users                               Equipe do Luther (memberships, via servidor)
 /settings
 
 POST /api/translate                        Segmento(s) → DeepSeek (SSE)
@@ -267,7 +314,8 @@ O CRUD usa Server Actions. Route handlers ficam só para streaming, upload e exp
 ## Roadmap
 
 1. ~~Setup do monorepo + shadcn + UI compartilhada (shell e layout do editor)~~
-2. ~~Schema e RLS (migrations + testes)~~ · Auth no app (login, middleware, `/admin/users`) pendente
+2. ~~Schema e RLS (migrations + testes); login único, multi-zones e autorização no servidor~~
+   (pendente: `/admin/users` para gerenciar a equipe)
 3. Parser/segmentador MDX, com testes
 4. CRUD de obras + importação (incluindo o acervo de `content/`)
 5. Editor + DeepSeek

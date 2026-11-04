@@ -110,24 +110,24 @@ alter table public.segment_revisions enable row level security;
 alter table public.stage_events enable row level security;
 
 create policy "Colaboradores leem traduções" on public.translations
-  for select to authenticated using ((select public.is_member()));
+  for select to authenticated using ((select private.is_luther_member()));
 
 create policy "Colaboradores leem versões" on public.translation_versions
-  for select to authenticated using ((select public.is_member()));
+  for select to authenticated using ((select private.is_luther_member()));
 create policy "Admins e revisores editam dados da versão" on public.translation_versions
   for update to authenticated
-  using ((select public.has_role('admin', 'reviewer')))
-  with check ((select public.has_role('admin', 'reviewer')));
+  using ((select private.luther_has_role('admin', 'reviewer')))
+  with check ((select private.luther_has_role('admin', 'reviewer')));
 
 create policy "Colaboradores leem segmentos" on public.segments
-  for select to authenticated using ((select public.is_member()));
+  for select to authenticated using ((select private.is_luther_member()));
 create policy "Colaboradores editam segmentos" on public.segments
   for update to authenticated
-  using ((select public.is_member()))
-  with check ((select public.is_member()));
+  using ((select private.is_luther_member()))
+  with check ((select private.is_luther_member()));
 
 create policy "Colaboradores leem revisões" on public.segment_revisions
-  for select to authenticated using ((select public.is_member()));
+  for select to authenticated using ((select private.is_luther_member()));
 
 create policy "Colaboradores leem eventos de etapa" on public.stage_events
-  for select to authenticated using ((select public.is_member()));
+  for select to authenticated using ((select private.is_luther_member()));

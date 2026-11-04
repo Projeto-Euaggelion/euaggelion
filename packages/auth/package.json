@@ -1,0 +1,32 @@
+{
+  "name": "@euaggelion/auth",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./server": "./src/server.ts",
+    "./access": "./src/access.ts",
+    "./proxy": "./src/proxy.ts",
+    "./redirect": "./src/redirect.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc"
+  },
+  "dependencies": {
+    "@euaggelion/db": "workspace:*",
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.119.0",
+    "server-only": "^0.0.1"
+  },
+  "peerDependencies": {
+    "next": "^16",
+    "react": "^19"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "next": "16.4.5",
+    "react": "19.3.0",
+    "typescript": "^5"
+  }
+}

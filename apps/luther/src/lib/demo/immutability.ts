@@ -6,9 +6,9 @@
 import type { CommentThread, Person, Segment, WorkHeader } from "@/components/editor/types"
 
 export const people: Person[] = [
-  { id: "me", name: "Você", role: "admin" },
-  { id: "ana", name: "Ana Ribeiro", role: "reviewer" },
-  { id: "davi", name: "Davi Moura", role: "translator" },
+  { id: "me", name: "Você" },
+  { id: "ana", name: "Ana Ribeiro" },
+  { id: "davi", name: "Davi Moura" },
 ]
 
 export const work: WorkHeader = {

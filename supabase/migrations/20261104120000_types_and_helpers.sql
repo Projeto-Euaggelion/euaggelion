@@ -2,7 +2,18 @@
 -- Tipos e helpers gerais
 -- =============================================================================
 
-create type public.app_role as enum ('admin', 'translator', 'reviewer');
+-- Schema não exposto pela API (PostgREST expõe só "public"): helpers de autorização
+-- usados pelas policies ficam aqui e não podem ser chamados pelo client como RPC.
+create schema if not exists private;
+grant usage on schema private to anon, authenticated, service_role;
+
+-- Aplicações do Projeto Euaggelion (espelhado em @euaggelion/db/apps)
+create type public.euaggelion_app as enum (
+  'site', 'luther', 'commentary', 'reader', 'dictionary', 'chronology', 'atlas'
+);
+
+-- Papéis dentro do Luther (equipe de tradução e revisão)
+create type public.luther_role as enum ('admin', 'translator', 'reviewer');
 
 create type public.work_type as enum ('sermon', 'article', 'commentary');
 create type public.work_status as enum ('draft', 'active', 'archived');

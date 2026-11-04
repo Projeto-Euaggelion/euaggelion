@@ -28,6 +28,12 @@
       ],
       "@euaggelion/ui/*": [
         "../../packages/ui/src/*"
+      ],
+      "@euaggelion/db/*": [
+        "../../packages/db/src/*"
+      ],
+      "@euaggelion/auth/*": [
+        "../../packages/auth/src/*"
       ]
     }
   },

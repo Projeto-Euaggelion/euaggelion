@@ -3,10 +3,10 @@ import type { SegmentStage } from "@euaggelion/mdx"
 export type SegmentKind = "title" | "description" | "paragraph" | "quote" | "heading" | "footnote"
 export type Side = "source" | "target"
 
+/** Pessoa exibida no editor. Só dados de exibição: papéis nunca chegam ao client. */
 export interface Person {
   id: string
   name: string
-  role: "admin" | "translator" | "reviewer"
 }
 
 export interface Segment {

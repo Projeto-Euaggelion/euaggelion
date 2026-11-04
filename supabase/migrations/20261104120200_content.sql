@@ -86,7 +86,7 @@ create trigger source_segments_immutable before update on public.source_segments
   for each row execute function public.prevent_update();
 
 -- Versão mais recente da fonte de uma obra
-create function public.latest_source_version_id(p_work_id uuid)
+create function private.latest_source_version_id(p_work_id uuid)
 returns uuid
 language sql
 stable
@@ -108,25 +108,25 @@ alter table public.source_versions enable row level security;
 alter table public.source_segments enable row level security;
 
 create policy "Colaboradores leem autores" on public.authors
-  for select to authenticated using ((select public.is_member()));
+  for select to authenticated using ((select private.is_luther_member()));
 create policy "Admins inserem autores" on public.authors
-  for insert to authenticated with check ((select public.is_admin()));
+  for insert to authenticated with check ((select private.is_luther_admin()));
 create policy "Admins editam autores" on public.authors
-  for update to authenticated using ((select public.is_admin())) with check ((select public.is_admin()));
+  for update to authenticated using ((select private.is_luther_admin())) with check ((select private.is_luther_admin()));
 create policy "Admins removem autores" on public.authors
-  for delete to authenticated using ((select public.is_admin()));
+  for delete to authenticated using ((select private.is_luther_admin()));
 
 create policy "Colaboradores leem obras" on public.works
-  for select to authenticated using ((select public.is_member()));
+  for select to authenticated using ((select private.is_luther_member()));
 create policy "Admins inserem obras" on public.works
-  for insert to authenticated with check ((select public.is_admin()));
+  for insert to authenticated with check ((select private.is_luther_admin()));
 create policy "Admins editam obras" on public.works
-  for update to authenticated using ((select public.is_admin())) with check ((select public.is_admin()));
+  for update to authenticated using ((select private.is_luther_admin())) with check ((select private.is_luther_admin()));
 create policy "Admins removem obras" on public.works
-  for delete to authenticated using ((select public.is_admin()));
+  for delete to authenticated using ((select private.is_luther_admin()));
 
 create policy "Colaboradores leem versões da fonte" on public.source_versions
-  for select to authenticated using ((select public.is_member()));
+  for select to authenticated using ((select private.is_luther_member()));
 
 create policy "Colaboradores leem segmentos da fonte" on public.source_segments
-  for select to authenticated using ((select public.is_member()));
+  for select to authenticated using ((select private.is_luther_member()));

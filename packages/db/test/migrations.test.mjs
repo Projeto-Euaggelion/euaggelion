@@ -29,7 +29,7 @@ for (const f of fs.readdirSync(dir).filter((f) => f.endsWith('.sql')).sort()) {
 }
 
 // --- Helpers -------------------------------------------------------------------
-const U = { admin: '00000000-0000-0000-0000-00000000000a', tr: '00000000-0000-0000-0000-00000000000b', rev: '00000000-0000-0000-0000-00000000000c' }
+const U = { admin: '00000000-0000-0000-0000-00000000000a', tr: '00000000-0000-0000-0000-00000000000b', rev: '00000000-0000-0000-0000-00000000000c', reader: '00000000-0000-0000-0000-00000000000d' }
 async function as(who, sql, params) {
   await db.exec(`reset role; select set_config('request.jwt.claim.sub', '', false);`)
   if (who === 'anon') await db.exec(`set role anon;`)
@@ -43,16 +43,24 @@ async function expectErr(name, who, sql, match, params) {
 }
 
 // --- Usuários (trigger handle_new_user) ----------------------------------------
-console.log('\nAuth / perfis')
+console.log('\nContas e acesso por app')
 await db.query(`insert into auth.users (id, email, raw_user_meta_data, raw_app_meta_data) values
-  ($1, 'admin@x.org', '{"name":"Admin"}', '{"role":"admin"}'),
-  ($2, 'tr@x.org', '{"name":"Tradutor"}', '{}'),
-  ($3, 'rev@x.org', '{}', '{"role":"reviewer"}')`, [U.admin, U.tr, U.rev])
-const roles = (await db.query(`select email, name, role from public.profiles order by email`)).rows
-roles.length === 3 && roles.find(r => r.email === 'tr@x.org').role === 'translator' && roles.find(r => r.email === 'rev@x.org').name === 'rev'
-  ? ok('perfis criados por trigger com papéis') : bad('perfis', JSON.stringify(roles))
-await expectErr('tradutor não muda o próprio papel', 'tr', `update public.profiles set role='admin' where id='${U.tr}'`, 'administradores')
+  ($1, 'admin@x.org', '{"name":"Admin"}', '{"apps":{"luther":"admin"}}'),
+  ($2, 'tr@x.org', '{"name":"Tradutor"}', '{"apps":{"luther":"translator"}}'),
+  ($3, 'rev@x.org', '{}', '{"apps":{"luther":"reviewer","atlas":"viewer"}}'),
+  ($4, 'leitor@x.org', '{"name":"Leitor"}', '{}')`, [U.admin, U.tr, U.rev, U.reader])
+const profiles = (await db.query(`select email, name from public.profiles order by email`)).rows
+profiles.length === 4 && profiles.find(r => r.email === 'rev@x.org').name === 'rev' ? ok('perfil global criado para todo usuário') : bad('perfis', JSON.stringify(profiles))
+const mem = (await db.query(`select p.email, m.app, m.role from public.app_memberships m join public.profiles p on p.id = m.user_id order by 1, 2`)).rows
+mem.length === 4 && mem.some(m => m.email === 'rev@x.org' && m.app === 'atlas') && !mem.some(m => m.email === 'leitor@x.org')
+  ? ok('memberships por app vindas do convite (leitor sem acesso ao Luther)') : bad('memberships', JSON.stringify(mem))
+await expectErr('papel inválido no Luther é recusado', 'service', `insert into public.app_memberships (user_id, app, role) values ('${U.reader}', 'luther', 'owner')`, 'app_memberships_luther_role')
+await expectErr('client não lê memberships (nem as próprias)', 'tr', `select * from public.app_memberships`, 'permission denied')
+await expectErr('client não se concede acesso', 'reader', `insert into public.app_memberships (user_id, app, role) values ('${U.reader}', 'luther', 'admin')`, 'permission denied')
+await expectErr('helpers de papel ficam fora da API (schema private)', 'tr', `select public.is_luther_member()`, 'does not exist')
 await expectOk('tradutor edita o próprio nome', 'tr', `update public.profiles set name='Davi' where id='${U.tr}'`)
+const readerProfiles = await as('reader', `select count(*)::int as n from public.profiles`)
+readerProfiles.rows[0].n === 1 ? ok('usuário fora do Luther só vê o próprio perfil') : bad('perfis do leitor', readerProfiles.rows[0].n)
 await expectErr('anon não lê perfis', 'anon', `select * from public.profiles`, 'permission denied')
 
 // --- Conteúdo ------------------------------------------------------------------
@@ -61,6 +69,9 @@ await expectErr('tradutor não cria autor', 'tr', `insert into public.authors (n
 const author = (await expectOk('admin cria autor', 'admin', `insert into public.authors (name, slug) values ('C. H. Spurgeon','c-h-spurgeon') returning id`)).rows[0].id
 await expectErr('data incoerente com a precisão', 'admin', `insert into public.works (author_id, type, slug, title, date_text, date_precision) values ('${author}','sermon','x','X','1855-01','year')`, 'works_date_matches_precision')
 const work = (await expectOk('admin cria obra', 'admin', `insert into public.works (author_id, type, slug, title, date_text, date_precision, status) values ('${author}','sermon','the-immutability-of-god','The Immutability of God','1855-01-07','day','active') returning id`)).rows[0].id
+const readerWorks = await as('reader', `select count(*)::int as n from public.works`)
+readerWorks.rows[0].n === 0 ? ok('usuário sem acesso ao Luther não vê obras em andamento') : bad('obras do leitor', readerWorks.rows[0].n)
+await expectErr('usuário sem acesso ao Luther não cria versão', 'reader', `select public.create_translation_version('${work}', 'pt-BR')`, 'revisores')
 const segs = JSON.stringify([
   { position: 0, kind: 'title', text: 'The Immutability of God', ast_path: '0' },
   { position: 1, kind: 'paragraph', text: 'It has been said by some one...', ast_path: '1' },

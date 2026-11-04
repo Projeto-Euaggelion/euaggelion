@@ -17,7 +17,7 @@ import {
   SidebarSeparator,
 } from "@euaggelion/ui/components/sidebar"
 import { cn } from "@euaggelion/ui/lib/utils"
-import { EUAGGELION_APPS, appUrl, type EuaggelionAppId } from "@euaggelion/ui/shell/apps"
+import { EUAGGELION_APPS, type EuaggelionAppId } from "@euaggelion/ui/shell/apps"
 import { NavUser, type ShellUser } from "@euaggelion/ui/shell/nav-user"
 
 interface AppShellProps {
@@ -25,7 +25,10 @@ interface AppShellProps {
   currentApp: EuaggelionAppId
   /** Sidebar interna: navegação e funções do app aberto. */
   sidebar: React.ReactNode
+  /** Conta logada (só dados de exibição). */
   user: ShellUser
+  /** Apps que o usuário pode abrir, decididos no servidor. */
+  apps: EuaggelionAppId[]
   children: React.ReactNode
 }
 
@@ -33,11 +36,11 @@ interface AppShellProps {
  * Shell comum a todas as aplicações do Euaggelion:
  * trilho externo (apps do projeto) + sidebar interna (navegação do app) + conteúdo.
  */
-export function AppShell({ currentApp, sidebar, user, children }: AppShellProps) {
+export function AppShell({ currentApp, sidebar, user, apps, children }: AppShellProps) {
   return (
     <SidebarProvider style={{ "--sidebar-width": "320px" } as React.CSSProperties}>
       <Sidebar collapsible="icon" className="overflow-hidden *:data-[sidebar=sidebar]:flex-row">
-        <AppRail currentApp={currentApp} user={user} />
+        <AppRail currentApp={currentApp} user={user} apps={apps} />
         <Sidebar collapsible="none" className="hidden flex-1 md:flex">
           {sidebar}
         </Sidebar>
@@ -47,14 +50,15 @@ export function AppShell({ currentApp, sidebar, user, children }: AppShellProps)
   )
 }
 
-function AppRail({ currentApp, user }: { currentApp: EuaggelionAppId; user: ShellUser }) {
+function AppRail({ currentApp, user, apps }: { currentApp: EuaggelionAppId; user: ShellUser; apps: EuaggelionAppId[] }) {
+  const visible = EUAGGELION_APPS.filter((app) => apps.includes(app.id))
   return (
     <Sidebar collapsible="none" className="w-[calc(var(--sidebar-width-icon)+1px)]! border-r">
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild className="md:h-8 md:p-0">
-              <a href={appUrl("site", currentApp)} aria-label="Projeto Euaggelion">
+              <a href="/" aria-label="Projeto Euaggelion">
                 <EuaggelionMark />
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-medium">Euaggelion</span>
@@ -70,7 +74,7 @@ function AppRail({ currentApp, user }: { currentApp: EuaggelionAppId; user: Shel
         <SidebarGroup>
           <SidebarGroupContent className="px-1.5 md:px-0">
             <SidebarMenu>
-              {EUAGGELION_APPS.map((app) => {
+              {visible.map((app) => {
                 const soon = app.status === "soon"
                 const active = app.id === currentApp
                 return (
@@ -93,7 +97,8 @@ function AppRail({ currentApp, user }: { currentApp: EuaggelionAppId; user: Shel
                         soon && "opacity-45",
                       )}
                     >
-                      <a href={soon ? undefined : appUrl(app.id, currentApp)} aria-disabled={soon || undefined}>
+                      {/* Entre zonas a navegação é "hard": <a>, não <Link> */}
+                      <a href={soon ? undefined : app.path} aria-disabled={soon || undefined}>
                         <app.icon />
                         <span>{app.name}</span>
                       </a>

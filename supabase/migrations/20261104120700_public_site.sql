@@ -3,7 +3,7 @@
 -- =============================================================================
 
 -- security definer: evita recursão entre as policies de works e translations
-create function public.is_published_work(p_work_id uuid)
+create function private.is_published_work(p_work_id uuid)
 returns boolean
 language sql
 stable
@@ -20,7 +20,6 @@ as $$
   );
 $$;
 
-grant execute on function public.is_published_work(uuid) to anon, authenticated;
 
 -- Tabelas internas: nenhum acesso anônimo (além da RLS, sem grant)
 revoke all on
@@ -39,15 +38,15 @@ grant select (id, translation_id, version, credits, mdx, published_at) on public
 
 create policy "Público lê autores com obras publicadas" on public.authors
   for select to anon
-  using (exists (select 1 from public.works w where w.author_id = authors.id and public.is_published_work(w.id)));
+  using (exists (select 1 from public.works w where w.author_id = authors.id and private.is_published_work(w.id)));
 
 create policy "Público lê obras publicadas" on public.works
   for select to anon
-  using (public.is_published_work(id));
+  using (private.is_published_work(id));
 
 create policy "Público lê traduções publicadas" on public.translations
   for select to anon
-  using (published_version_id is not null and public.is_published_work(work_id));
+  using (published_version_id is not null and private.is_published_work(work_id));
 
 create policy "Público lê versões publicadas" on public.translation_versions
   for select to anon
@@ -57,7 +56,7 @@ create policy "Público lê versões publicadas" on public.translation_versions
       select 1 from public.translations t
        where t.id = translation_versions.translation_id
          and t.published_version_id = translation_versions.id
-         and public.is_published_work(t.work_id)
+         and private.is_published_work(t.work_id)
     )
   );
 

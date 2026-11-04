@@ -75,30 +75,30 @@ alter table public.comments enable row level security;
 alter table public.notifications enable row level security;
 
 create policy "Colaboradores leem threads" on public.comment_threads
-  for select to authenticated using ((select public.is_member()));
+  for select to authenticated using ((select private.is_luther_member()));
 create policy "Colaboradores criam threads" on public.comment_threads
   for insert to authenticated
-  with check ((select public.is_member()) and created_by = (select auth.uid()));
+  with check ((select private.is_luther_member()) and created_by = (select auth.uid()));
 create policy "Colaboradores atualizam threads" on public.comment_threads
   for update to authenticated
-  using ((select public.is_member()))
-  with check ((select public.is_member()));   -- quem pode resolver é checado por trigger
+  using ((select private.is_luther_member()))
+  with check ((select private.is_luther_member()));   -- quem pode resolver é checado por trigger
 create policy "Autor ou admin remove thread" on public.comment_threads
   for delete to authenticated
-  using (created_by = (select auth.uid()) or (select public.is_admin()));
+  using (created_by = (select auth.uid()) or (select private.is_luther_admin()));
 
 create policy "Colaboradores leem comentários" on public.comments
-  for select to authenticated using ((select public.is_member()));
+  for select to authenticated using ((select private.is_luther_member()));
 create policy "Colaboradores comentam" on public.comments
   for insert to authenticated
-  with check ((select public.is_member()) and author_id = (select auth.uid()));
+  with check ((select private.is_luther_member()) and author_id = (select auth.uid()));
 create policy "Autor edita o próprio comentário" on public.comments
   for update to authenticated
   using (author_id = (select auth.uid()))
   with check (author_id = (select auth.uid()));
 create policy "Autor ou admin remove comentário" on public.comments
   for delete to authenticated
-  using (author_id = (select auth.uid()) or (select public.is_admin()));
+  using (author_id = (select auth.uid()) or (select private.is_luther_admin()));
 
 create policy "Usuário lê as próprias notificações" on public.notifications
   for select to authenticated using (user_id = (select auth.uid()));

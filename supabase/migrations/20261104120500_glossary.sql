@@ -22,14 +22,14 @@ create trigger glossary_terms_set_updated_at before update on public.glossary_te
 alter table public.glossary_terms enable row level security;
 
 create policy "Colaboradores leem o glossário" on public.glossary_terms
-  for select to authenticated using ((select public.is_member()));
+  for select to authenticated using ((select private.is_luther_member()));
 create policy "Admins e revisores inserem termos" on public.glossary_terms
-  for insert to authenticated with check ((select public.has_role('admin', 'reviewer')));
+  for insert to authenticated with check ((select private.luther_has_role('admin', 'reviewer')));
 create policy "Admins e revisores editam termos" on public.glossary_terms
   for update to authenticated
-  using ((select public.has_role('admin', 'reviewer')))
-  with check ((select public.has_role('admin', 'reviewer')));
+  using ((select private.luther_has_role('admin', 'reviewer')))
+  with check ((select private.luther_has_role('admin', 'reviewer')));
 create policy "Admins e revisores removem termos" on public.glossary_terms
-  for delete to authenticated using ((select public.has_role('admin', 'reviewer')));
+  for delete to authenticated using ((select private.luther_has_role('admin', 'reviewer')));
 
 revoke all on public.glossary_terms from anon;

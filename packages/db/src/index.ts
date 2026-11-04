@@ -1,7 +1,6 @@
 /**
  * @euaggelion/db
  *
- * Tipos gerados do Supabase (`supabase gen types`) e queries compartilhadas.
- * Preenchido na etapa 2, quando o schema for definido.
+ * Constantes que espelham o schema e (após `pnpm gen:types`) os tipos gerados do Supabase.
  */
-export type Database = Record<string, never>;
+export * from "./apps"

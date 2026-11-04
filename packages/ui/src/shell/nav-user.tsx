@@ -16,14 +16,14 @@ import {
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from "@euaggelion/ui/components/sidebar"
 import { initials } from "@euaggelion/ui/lib/format"
 
+/** Dados de exibição da conta. Papéis e permissões nunca chegam ao client. */
 export interface ShellUser {
   name: string
   email: string
-  role?: string
 }
 
 /** Menu do usuário, comum a todos os apps (perfil, notificações, tema, sair). */
-export function NavUser({ user, onSignOut }: { user: ShellUser; onSignOut?: () => void }) {
+export function NavUser({ user }: { user: ShellUser }) {
   const { isMobile } = useSidebar()
   const { resolvedTheme, setTheme } = useTheme()
   const dark = resolvedTheme === "dark"
@@ -39,7 +39,7 @@ export function NavUser({ user, onSignOut }: { user: ShellUser; onSignOut?: () =
               </Avatar>
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-medium">{user.name}</span>
-                {user.role && <span className="truncate text-xs">{user.role}</span>}
+                <span className="truncate text-xs">{user.email}</span>
               </div>
             </SidebarMenuButton>
           </DropdownMenuTrigger>
@@ -64,9 +64,14 @@ export function NavUser({ user, onSignOut }: { user: ShellUser; onSignOut?: () =
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={onSignOut}>
-              <LogOutIcon /> Sair
-            </DropdownMenuItem>
+            {/* Logout único do Euaggelion: rota servida pela zona principal (apps/site) */}
+            <form action="/auth/signout" method="post">
+              <DropdownMenuItem asChild>
+                <button type="submit" className="w-full">
+                  <LogOutIcon /> Sair
+                </button>
+              </DropdownMenuItem>
+            </form>
           </DropdownMenuContent>
         </DropdownMenu>
       </SidebarMenuItem>

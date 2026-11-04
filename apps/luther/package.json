@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -p 3001",
     "build": "next build",
-    "start": "next start",
+    "start": "next start -p 3001",
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit"
   },
@@ -16,7 +16,9 @@
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "@euaggelion/ui": "workspace:*",
-    "lucide-react": "^1.68.0"
+    "lucide-react": "^1.68.0",
+    "@euaggelion/auth": "workspace:*",
+    "server-only": "^0.0.1"
   },
   "devDependencies": {
     "@tailwindcss/turbopack": "^4",

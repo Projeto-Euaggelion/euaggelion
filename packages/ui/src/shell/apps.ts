@@ -1,8 +1,7 @@
 /**
- * Registro das aplicações do Projeto Euaggelion.
- * Alimenta o trilho externo (seletor de apps), compartilhado por todos os apps.
- * As URLs de cada app vêm de variáveis NEXT_PUBLIC_APP_URL_<ID> (ver .env.example);
- * sem variável, o app aparece como "em breve" ou aponta para "#".
+ * Apresentação das aplicações do Projeto Euaggelion no trilho de apps.
+ * Ids, caminhos e regra de acesso vêm de @euaggelion/db/apps; quais apps cada
+ * usuário pode abrir é decidido no servidor e chega ao shell como lista de ids.
  */
 import {
   BookOpenTextIcon,
@@ -15,46 +14,32 @@ import {
   type LucideIcon,
 } from "lucide-react"
 
-export type EuaggelionAppId =
-  | "site"
-  | "luther"
-  | "commentary"
-  | "reader"
-  | "dictionary"
-  | "chronology"
-  | "atlas"
+import { EUAGGELION_APP_CONFIG, EUAGGELION_APP_IDS, type EuaggelionAppId } from "@euaggelion/db/apps"
+
+export type { EuaggelionAppId }
 
 export interface EuaggelionApp {
   id: EuaggelionAppId
   name: string
   description: string
   icon: LucideIcon
+  path: string
   status: "active" | "soon"
-  /** Apps internos exigem login (ex.: Luther). */
-  internal?: boolean
 }
 
-export const EUAGGELION_APPS: EuaggelionApp[] = [
-  { id: "site", name: "Euaggelion", description: "Site público", icon: GlobeIcon, status: "soon" },
-  { id: "luther", name: "Luther", description: "Tradução e revisão", icon: LanguagesIcon, status: "active", internal: true },
-  { id: "commentary", name: "Comentário bíblico", description: "Comentários clássicos", icon: MessageSquareQuoteIcon, status: "soon" },
-  { id: "reader", name: "Leitor bíblico", description: "Leitura das Escrituras", icon: BookOpenTextIcon, status: "soon" },
-  { id: "dictionary", name: "Dicionário", description: "Verbetes bíblicos", icon: LibraryBigIcon, status: "soon" },
-  { id: "chronology", name: "Cronologia", description: "Linha do tempo bíblica", icon: HistoryIcon, status: "soon" },
-  { id: "atlas", name: "Atlas", description: "Mapas bíblicos", icon: MapIcon, status: "soon" },
-]
-
-const APP_URLS: Partial<Record<EuaggelionAppId, string | undefined>> = {
-  site: process.env.NEXT_PUBLIC_APP_URL_SITE,
-  luther: process.env.NEXT_PUBLIC_APP_URL_LUTHER,
-  commentary: process.env.NEXT_PUBLIC_APP_URL_COMMENTARY,
-  reader: process.env.NEXT_PUBLIC_APP_URL_READER,
-  dictionary: process.env.NEXT_PUBLIC_APP_URL_DICTIONARY,
-  chronology: process.env.NEXT_PUBLIC_APP_URL_CHRONOLOGY,
-  atlas: process.env.NEXT_PUBLIC_APP_URL_ATLAS,
+const PRESENTATION: Record<EuaggelionAppId, { name: string; description: string; icon: LucideIcon }> = {
+  site: { name: "Euaggelion", description: "Site público", icon: GlobeIcon },
+  luther: { name: "Luther", description: "Tradução e revisão", icon: LanguagesIcon },
+  commentary: { name: "Comentário bíblico", description: "Comentários clássicos", icon: MessageSquareQuoteIcon },
+  reader: { name: "Leitor bíblico", description: "Leitura das Escrituras", icon: BookOpenTextIcon },
+  dictionary: { name: "Dicionário", description: "Verbetes bíblicos", icon: LibraryBigIcon },
+  chronology: { name: "Cronologia", description: "Linha do tempo bíblica", icon: HistoryIcon },
+  atlas: { name: "Atlas", description: "Mapas bíblicos", icon: MapIcon },
 }
 
-export function appUrl(id: EuaggelionAppId, current: EuaggelionAppId) {
-  if (id === current) return "/"
-  return APP_URLS[id] ?? "#"
-}
+export const EUAGGELION_APPS: EuaggelionApp[] = EUAGGELION_APP_IDS.map((id) => ({
+  id,
+  ...PRESENTATION[id],
+  path: EUAGGELION_APP_CONFIG[id].path,
+  status: EUAGGELION_APP_CONFIG[id].status,
+}))
