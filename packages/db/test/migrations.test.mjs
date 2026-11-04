@@ -148,6 +148,9 @@ const segs2 = JSON.stringify([
   { position: 1, kind: 'paragraph', text: 'It has been said by someone (corrigido)...', ast_path: '1' },
   { position: 2, kind: 'quote', text: 'Great God, how infinite art thou', ast_path: '2' },
 ])
+const segsAttr = JSON.stringify([{ position: 0, kind: 'attribute', text: 'Augustine, Confessions', ast_path: '3@source' }])
+const workAttr = (await db.query(`insert into public.works (author_id, type, slug, title) values ('${author}','article','attr','Attr') returning id`)).rows[0].id
+await expectOk('segmento de atributo (kind attribute) é aceito', 'admin', `select public.create_source_version('${workAttr}', '<Quote source="Augustine, Confessions">x</Quote>', '${segsAttr}'::jsonb)`)
 await expectOk('admin cria versão 2 do original', 'admin', `select public.create_source_version('${work}', '# mdx v2', '${segs2}'::jsonb, '{}'::jsonb, 'correção de digitação')`)
 const ov1 = (await as('rev', `select is_outdated from public.translation_version_overview where id='${v1}'`)).rows[0]
 ov1.is_outdated ? ok('v1 da tradução marcada como desatualizada') : bad('is_outdated', JSON.stringify(ov1))

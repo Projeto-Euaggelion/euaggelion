@@ -192,14 +192,40 @@ O layout atual (`/works/[workId]/[lang]/v/[version]`) usa dados de demonstraçã
 
 ## MDX
 
-- **Parse:** `unified` + `remark-mdx` + `remark-frontmatter`.
-- **Segmentação por nó de bloco:** parágrafo, título, item de lista, citação e nota de rodapé
-  viram segmentos. A formatação inline fica dentro do segmento como markdown.
-- **Não traduzíveis:** `import`/`export`, código e atributos de componentes (salvo os marcados como
-  traduzíveis no schema) são preservados como estão e nunca vão para a IA.
-- **Reconstrução:** a AST original recebe os textos traduzidos e é serializada de volta.
-- A saída da IA é validada contra o segmento original: a marcação inline (links, ênfases, notas
-  `[^n]`) precisa ser preservada.
+Implementado em `packages/mdx` (testes: `pnpm --filter @euaggelion/mdx test`). Use
+`@euaggelion/mdx` no servidor; em Client Components, importe só `@euaggelion/mdx/schema`
+(constantes e tipos, sem o parser).
+
+- **Parse** (`parseMdx`): `unified` + `remark-parse` + `remark-mdx` + `remark-gfm` +
+  `remark-frontmatter`.
+  - CRLF e BOM são normalizados; `source` é o texto a gravar em `source_versions.mdx`.
+  - Erro de sintaxe lança `MdxSyntaxError` (com linha e coluna).
+- **Frontmatter** validado por `frontmatterSchema` (zod): `title`, `author`, `type` (obrigatórios),
+  `description`, `date` (`AAAA`, `AAAA-MM` ou `AAAA-MM-DD`; `datePrecision()` deriva a precisão),
+  `source`, `credits`, `slug`. Problemas vêm em `frontmatterIssues` e não impedem a segmentação.
+- **Segmentação** por bloco folha, na ordem do documento:
+  - `title` e `description` do frontmatter;
+  - `heading`; `paragraph` (inclui células de tabela);
+  - `list_item` (cada parágrafo de um item);
+  - `quote` (blockquote, `<Quote>`, `<Scripture>` em bloco);
+  - `footnote` (cada parágrafo da definição `[^n]:`);
+  - `attribute` (atributos traduzíveis de componentes).
+
+  O texto do segmento é o MDX do conteúdo, com a formatação inline e sem marcadores de bloco
+  (`>`, `-`, recuo). `ast_path` é a chave estável do segmento: índices dos nós (`"4.0"`),
+  `"<caminho>@<atributo>"` ou `"frontmatter.title"`.
+- **Não traduzíveis:** `import`/`export`, código, expressões `{…}`, imagens sem texto e atributos
+  não marcados como traduzíveis. Ficam fora dos segmentos e nunca vão para a IA.
+- **Reconstrução** (`reconstructMdx(original, { [ast_path]: texto }, { allowMissing?, frontmatter? })`):
+  - substitui só o intervalo de cada segmento no texto original, reaplicando os marcadores nas
+    linhas de continuação; tudo o mais é preservado byte a byte;
+  - sem mudanças, a saída é idêntica ao original;
+  - o frontmatter é editado no YAML, e `frontmatter` acrescenta campos (ex.: `language`);
+  - erros: lança `ReconstructError` para `ast_path` desconhecido, segmento faltando (salvo
+    `allowMissing`, usado na pré-visualização) ou estrutura alterada.
+- **Validação** (`validateTranslation(original, tradução, kind)`): confere MDX válido, a mesma
+  estrutura de bloco e a mesma marcação inline (links, notas `[^n]`, código, expressões, componentes
+  com os atributos não traduzíveis, ênfases). Use-a na saída da IA e ao salvar edições.
 
 Componentes iniciais, compartilhados entre Luther (preview) e site via `packages/mdx`:
 
@@ -209,6 +235,10 @@ Componentes iniciais, compartilhados entre Luther (preview) e site via `packages
 | `<Quote source="…">…</Quote>` | citação de outro autor |
 | `<Note>…</Note>` | nota editorial do Euaggelion |
 | Notas de rodapé GFM `[^1]` | notas do autor; cada uma é um segmento |
+
+O registro fica em `MDX_COMPONENTS` (`schema.ts`): o `kind` dos segmentos internos e os
+atributos traduzíveis (hoje, `source` de `<Quote>`). Os componentes React ficam para a
+pré-visualização (etapa 7).
 
 ## Supabase
 
@@ -238,6 +268,7 @@ Componentes iniciais, compartilhados entre Luther (preview) e site via `packages
 | `…120500_glossary` | `glossary_terms` |
 | `…120600_workflow` | regras do fluxo editorial (triggers), RPCs e `translation_version_overview` |
 | `…120700_public_site` | acesso anônimo ao que foi publicado + view `published_translations` |
+| `…120800_segment_kind_attribute` | `segment_kind` ganha `attribute` (atributos traduzíveis) |
 
 **Regras aplicadas no banco:**
 - transições de etapa válidas e o papel exigido para cada uma;
@@ -316,7 +347,7 @@ O CRUD usa Server Actions. Route handlers ficam só para streaming, upload e exp
 1. ~~Setup do monorepo + shadcn + UI compartilhada (shell e layout do editor)~~
 2. ~~Schema e RLS (migrations + testes); login único, multi-zones e autorização no servidor~~
    (pendente: `/admin/users` para gerenciar a equipe)
-3. Parser/segmentador MDX, com testes
+3. ~~Parser/segmentador MDX, com testes~~
 4. CRUD de obras + importação (incluindo o acervo de `content/`)
 5. Editor + DeepSeek
 6. Fluxo de etapas + comentários

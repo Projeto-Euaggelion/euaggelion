@@ -2,21 +2,17 @@
  * @euaggelion/mdx
  *
  * Convenções de MDX compartilhadas entre os apps do Euaggelion:
- * - schema do frontmatter
- * - parser / segmentador (etapa 3)
- * - componentes MDX (Scripture, Quote, Note)
+ * - schema do frontmatter e componentes conhecidos (`schema`)
+ * - parser / segmentador (`parseMdx`)
+ * - reconstrução do MDX traduzido (`reconstructMdx`)
+ * - validação da tradução de um segmento (`validateTranslation`)
  */
 
-export const WORK_TYPES = ["sermon", "article", "commentary"] as const;
-export type WorkType = (typeof WORK_TYPES)[number];
-
-export const SEGMENT_STAGES = [
-  "original",
-  "translation",
-  "review",
-  "discussion",
-  "approved",
-] as const;
-export type SegmentStage = (typeof SEGMENT_STAGES)[number];
-
-export const SOURCE_LANGUAGE = "en" as const;
+export * from "./schema"
+export { MdxSyntaxError, normalizeSource } from "./processor"
+export { parseMdx, locateSegments } from "./segment"
+export type { SourceSegment, ParsedMdx, MdxIssue, LocatedSegment, LocatedDocument } from "./segment"
+export { reconstructMdx, ReconstructError } from "./reconstruct"
+export type { ReconstructOptions } from "./reconstruct"
+export { validateTranslation } from "./validate"
+export type { ValidationResult } from "./validate"
