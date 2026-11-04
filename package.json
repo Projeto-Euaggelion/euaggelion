@@ -1,5 +1,17 @@
 {
   "name": "euaggelion",
   "private": true,
-  "packageManager": "pnpm@10.30.3"
+  "packageManager": "pnpm@10.28.0",
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "dev:luther": "pnpm --filter luther dev"
+  },
+  "devDependencies": {
+    "turbo": "^2",
+    "typescript": "^5"
+  }
 }

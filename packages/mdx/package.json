@@ -1,0 +1,15 @@
+{
+  "name": "@euaggelion/mdx",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "typecheck": "tsc",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "^5",
+    "vitest": "^3"
+  }
+}

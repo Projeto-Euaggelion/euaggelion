@@ -1,6 +1,3 @@
 packages:
-  - apps/*
-  - packages/*
-
-publicHoistPattern:
-  - 'styled-jsx'
+  - "apps/*"
+  - "packages/*"
