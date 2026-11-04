@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  transpilePackages: ["@euaggelion/mdx", "@euaggelion/db"],
+  transpilePackages: ["@euaggelion/ui", "@euaggelion/mdx", "@euaggelion/db"],
   cacheComponents: true,
   partialPrefetching: true,
   turbopack: {

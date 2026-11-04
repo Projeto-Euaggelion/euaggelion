@@ -7,14 +7,16 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {
+    "@euaggelion/db": "workspace:*",
+    "@euaggelion/mdx": "workspace:*",
     "next": "16.4.5",
     "react": "19.3.0",
     "react-dom": "19.3.0",
-    "@euaggelion/mdx": "workspace:*",
-    "@euaggelion/db": "workspace:*"
+    "@euaggelion/ui": "workspace:*",
+    "lucide-react": "^1.68.0"
   },
   "devDependencies": {
     "@tailwindcss/turbopack": "^4",

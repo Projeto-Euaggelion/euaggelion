@@ -5,9 +5,10 @@ repositório e deve ser atualizado sempre que uma decisão for tomada ou revista
 
 ## Visão
 
-O Euaggelion é um projeto que vai crescer em várias frentes. A primeira é o **Luther**, um webapp
-de tradução e revisão de textos de autores clássicos do cristianismo (sermões, artigos e
-comentários). O site público (`apps/site`) será construído depois, sobre esta mesma arquitetura.
+O Euaggelion é um conjunto de aplicações: site, Luther (tradução/revisão), comentário bíblico,
+leitor bíblico, dicionário, cronologia, atlas etc. **Cada app tem seus próprios recursos, mas todos
+compartilham a mesma UI** (`packages/ui`). O primeiro app é o **Luther**, para traduzir e revisar
+textos de autores clássicos do cristianismo (sermões, artigos e comentários).
 
 ## Stack
 
@@ -16,6 +17,8 @@ comentários). O site público (`apps/site`) será construído depois, sobre est
 - **Supabase**: Postgres, Auth e RLS
 - **DeepSeek API** para tradução assistida, chamada **somente no servidor**
 - **MDX** como formato de conteúdo, do original à tradução publicada
+- **Tiptap (ProseMirror)** no editor de tradução (etapa 5)
+- **Mailgun** para e-mails transacionais (notificações)
 - **pnpm workspaces** + **Turborepo**
 
 > A versão do Next.js usada aqui tem mudanças incompatíveis com versões anteriores. Consulte
@@ -26,11 +29,34 @@ comentários). O site público (`apps/site`) será construído depois, sobre est
 ```
 apps/luther      Webapp de tradução/revisão (interno, autenticado)
 apps/site        Site público (futuro): lê apenas versões publicadas
+apps/…           Demais apps (comentário, leitor, cronologia, atlas…), todos sobre packages/ui
+packages/ui      UI compartilhada: shadcn/ui, tema, tokens e o shell dos apps
 packages/mdx     Convenções MDX: schema do frontmatter, parser/segmentador, componentes
 packages/db      Tipos gerados do Supabase + queries compartilhadas
 supabase/        Migrations (Supabase CLI)
 content/         Acervo legado de textos-fonte (ver abaixo)
 ```
+
+## UI compartilhada (`packages/ui`)
+
+- **shadcn/ui** (estilo `radix-nova`) fica em `packages/ui/src/components`. Para adicionar um
+  componente, rode o CLI **dentro de `packages/ui`**: `pnpm dlx shadcn@latest add <nome>`.
+  Nos apps, importe de `@euaggelion/ui/components/<nome>`.
+- **Tema** em `packages/ui/src/styles/globals.css`. Cada app só faz
+  `@import "@euaggelion/ui/globals.css"`.
+  - Cor principal do Euaggelion: **`#d12026`** (`--brand`, `oklch(0.553 0.209 26.33)`), usada como
+    `primary`, `ring` e `sidebar-primary`.
+  - **O modo escuro é o padrão** (`next-themes`, `defaultTheme="dark"`). O modo claro continua
+    disponível pelo menu do usuário.
+  - Fonte: Inter.
+- **Shell** (`@euaggelion/ui/shell/*`), igual em todos os apps:
+  - **Trilho externo**: seletor das aplicações do Euaggelion, definido em `shell/apps.ts`
+    (`EUAGGELION_APPS`). As URLs vêm de `NEXT_PUBLIC_APP_URL_<ID>`. Apps sem URL aparecem como
+    "em breve".
+  - **Sidebar interna**: navegação e funções do app aberto. Cada app fornece a sua (ex.:
+    `apps/luther/src/components/luther-sidebar.tsx`).
+  - `AppShell` (`currentApp`, `sidebar`, `user`) compõe os dois níveis. `AppHeader` é o cabeçalho
+    padrão da área de conteúdo. `NavUser` é o menu do usuário (perfil, notificações, tema, sair).
 
 ### `content/` (acervo legado)
 
@@ -89,8 +115,36 @@ original ─► translation ─► review ─► approved
 | `discussion` | dúvida aberta com thread de comentários | qualquer um abre, revisor fecha |
 | `approved` | final | revisor/admin |
 
-O status da versão é derivado dos segmentos. Para publicar, todos os segmentos precisam estar
-`approved`. Toda transição fica registrada em `stage_events`.
+O status da versão é derivado dos segmentos. Toda transição fica registrada em `stage_events`.
+
+**Regras de conclusão:**
+- Um segmento **não pode ser aprovado** enquanto houver thread aberta **na tradução** desse
+  segmento.
+- A tradução (versão) **só pode ser concluída/publicada** com todos os segmentos `approved` e
+  **nenhuma** thread aberta na tradução.
+- Threads **não alteram a etapa** do segmento. `discussion` é marcada explicitamente.
+- Threads **no original (EN)** são permitidas e **não criam pendências**.
+
+## Editor e comentários
+
+- **Duas colunas por segmento**: original (EN) à esquerda, em tom mais discreto e imutável;
+  tradução à direita, editável. Cada segmento mostra a etapa (indicador na margem e menu
+  "Mover para") e a ação "Aprovar".
+- **Barra de seleção**: ao selecionar um trecho aparece a barra flutuante. **Comentário** é a ação
+  principal (vale nos dois lados). Na tradução, a barra também mostra a formatação que o MDX
+  representa: negrito, itálico, link, nota de rodapé e `<Scripture>`. Não há fonte, cor,
+  sublinhado nem alinhamento.
+- **Threads ancoradas em trechos**: a seleção fica restrita a um segmento. A âncora guarda o
+  trecho citado + prefixo/sufixo + offsets, para ser recalculada após edições. Se o trecho deixar
+  de existir, a thread fica "desancorada" mas continua visível no segmento.
+- **Painel lateral** com três abas:
+  - Comentários: abertas, resolvidas ou todas; responder, @menções, resolver/reabrir.
+  - IA: sugestões do DeepSeek, com "Outra sugestão", "Ver diferenças" e "Substituir".
+  - Histórico do segmento.
+- **Notificações** de @menções e respostas: no app (sino) e por **e-mail via Mailgun**.
+
+O layout atual (`/works/[workId]/[lang]/v/[version]`) usa dados de demonstração
+(`apps/luther/src/lib/demo`), que serão trocados pelo Supabase na etapa 2.
 
 ## MDX
 
@@ -135,7 +189,11 @@ translation_versions  id, translation_id, version, source_version_id, based_on_v
                       status, credits, created_by, published_at
 segments              id, translation_version_id, source_segment_id, text, stage, updated_by
 segment_revisions     id, segment_id, text, origin, model, tokens, author_id
-comments              id, segment_id, parent_id, author_id, body, resolved
+comment_threads       id, translation_version_id, segment_id, side (source|target), quote,
+                      prefix, suffix, start_offset, end_offset, status (open|resolved),
+                      created_by, resolved_by, resolved_at
+comments              id, thread_id, author_id, body, mentions[], created_at, edited_at
+notifications         id, user_id, kind, thread_id, comment_id, read_at, emailed_at
 glossary_terms        id, language, source_term, target_term, notes
 stage_events          id, segment_id, from_stage, to_stage, actor_id
 ```
@@ -166,7 +224,7 @@ O CRUD usa Server Actions. Route handlers ficam só para streaming, upload e exp
 
 ## Roadmap
 
-1. ~~Setup do monorepo~~ (parcial: falta concluir a configuração do shadcn)
+1. ~~Setup do monorepo + shadcn + UI compartilhada (shell e layout do editor)~~
 2. Schema, RLS e Auth
 3. Parser/segmentador MDX, com testes
 4. CRUD de obras + importação (incluindo o acervo de `content/`)
