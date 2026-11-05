@@ -21,5 +21,6 @@ export async function getLutherPermissions() {
   return {
     canManageCatalog: role === "admin",
     canStartTranslation: role === "admin" || role === "reviewer",
+    canManageTeam: role === "admin",
   }
 }

@@ -3,7 +3,7 @@
 import Form from "next/form"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { BookAIcon, HouseIcon, LibraryIcon, PlusIcon, SearchIcon, SettingsIcon, UsersIcon } from "lucide-react"
+import { BookAIcon, HouseIcon, LibraryIcon, PlusIcon, SearchIcon, SettingsIcon, ShieldIcon, UsersIcon } from "lucide-react"
 
 import { Button } from "@euaggelion/ui/components/button"
 import {
@@ -24,13 +24,16 @@ const nav = [
   { title: "Autores", href: "/authors", icon: UsersIcon },
 ]
 
+const adminNav = [{ title: "Equipe", href: "/admin/users", icon: ShieldIcon }]
+
 const soon = [{ title: "Glossário", icon: BookAIcon }]
 
 /**
  * Sidebar interna do Luther: navegação e funções do app.
- * `canManageCatalog` é calculado no servidor (o papel não chega ao client).
+ * `canManageCatalog` e `canManageTeam` são calculados no servidor (o papel não chega ao client);
+ * as páginas e ações conferem o papel de novo.
  */
-export function LutherSidebar({ canManageCatalog }: { canManageCatalog: boolean }) {
+export function LutherSidebar({ canManageCatalog, canManageTeam }: { canManageCatalog: boolean; canManageTeam: boolean }) {
   const pathname = usePathname()
   const isActive = (href: string, exact?: boolean) =>
     exact ? pathname === href : pathname === href || pathname.startsWith(`${href}/`)
@@ -70,6 +73,24 @@ export function LutherSidebar({ canManageCatalog }: { canManageCatalog: boolean 
             ))}
           </SidebarMenu>
         </SidebarGroup>
+
+        {canManageTeam && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Administração</SidebarGroupLabel>
+            <SidebarMenu>
+              {adminNav.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton asChild isActive={isActive(item.href)}>
+                    <Link href={item.href}>
+                      <item.icon />
+                      <span>{item.title}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroup>
+        )}
 
         <SidebarGroup>
           <SidebarGroupLabel>Em breve</SidebarGroupLabel>

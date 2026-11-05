@@ -1,4 +1,5 @@
 import type { SegmentKind, WorkType } from "@euaggelion/mdx/schema"
+import type { LutherRole } from "@euaggelion/db/apps"
 
 export const WORK_TYPE_LABELS: Record<WorkType, string> = {
   sermon: "Sermão",
@@ -24,6 +25,18 @@ export const WORK_STATUS_LABELS: Record<WorkStatus, string> = {
   draft: "Rascunho",
   active: "Ativa",
   archived: "Arquivada",
+}
+
+export const LUTHER_ROLE_LABELS: Record<LutherRole, string> = {
+  admin: "Administrador",
+  translator: "Tradutor",
+  reviewer: "Revisor",
+}
+
+export const LUTHER_ROLE_DESCRIPTIONS: Record<LutherRole, string> = {
+  admin: "Gerencia obras, autores e a equipe; revisa e publica.",
+  translator: "Traduz e envia os segmentos para revisão.",
+  reviewer: "Revisa, aprova, inicia traduções e publica.",
 }
 
 export const VERSION_STATUS_LABELS: Record<string, string> = {

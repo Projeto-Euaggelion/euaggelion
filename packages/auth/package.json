@@ -7,7 +7,8 @@
     "./server": "./src/server.ts",
     "./access": "./src/access.ts",
     "./proxy": "./src/proxy.ts",
-    "./redirect": "./src/redirect.ts"
+    "./redirect": "./src/redirect.ts",
+    "./env": "./src/env.ts"
   },
   "scripts": {
     "typecheck": "tsc"

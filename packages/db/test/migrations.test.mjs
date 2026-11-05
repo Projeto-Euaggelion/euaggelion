@@ -202,5 +202,17 @@ const cw2 = (await db.query(`select title, description from public.works where i
 cw2.title === 'All of Grace (revised)' && cw2.description === 'An earnest word.'
   ? ok('nova versão atualiza o título e mantém a descrição ausente no frontmatter') : bad('sync', JSON.stringify(cw2))
 
+// --- Equipe do Luther ----------------------------------------------------------
+console.log('\nEquipe do Luther (último admin)')
+await expectErr('não rebaixa o único admin', 'service', `update public.app_memberships set role='reviewer' where user_id='${U.admin}' and app='luther'`, 'ao menos um administrador')
+await expectErr('não desativa o único admin', 'service', `update public.app_memberships set active=false where user_id='${U.admin}' and app='luther'`, 'ao menos um administrador')
+await expectErr('não remove o único admin', 'service', `delete from public.app_memberships where user_id='${U.admin}' and app='luther'`, 'ao menos um administrador')
+await expectOk('admin promove o revisor a admin', 'service', `update public.app_memberships set role='admin' where user_id='${U.rev}' and app='luther'`)
+await expectOk('com outro admin ativo, o primeiro pode ser rebaixado', 'service', `update public.app_memberships set role='reviewer' where user_id='${U.admin}' and app='luther'`)
+await expectErr('agora o revisor promovido é o único admin', 'service', `update public.app_memberships set active=false where user_id='${U.rev}' and app='luther'`, 'ao menos um administrador')
+await expectOk('desativar um tradutor não é afetado', 'service', `update public.app_memberships set active=false where user_id='${U.tr}' and app='luther'`)
+await expectOk('outros apps não são afetados', 'service', `delete from public.app_memberships where user_id='${U.rev}' and app='atlas'`)
+await expectOk('restaura os papéis', 'service', `update public.app_memberships set role='admin' where user_id='${U.admin}' and app='luther'; update public.app_memberships set role='reviewer' where user_id='${U.rev}' and app='luther'; update public.app_memberships set active=true where user_id='${U.tr}' and app='luther';`)
+
 console.log(`\n${pass} ok, ${fail} falha(s)`)
 process.exit(fail ? 1 : 0)

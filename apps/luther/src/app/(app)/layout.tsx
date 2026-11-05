@@ -17,12 +17,12 @@ export default function AppLayout({ children }: LayoutProps<"/">) {
 /** Confere no servidor se a conta faz parte da equipe do Luther antes de renderizar qualquer coisa. */
 async function LutherGate({ children }: { children: React.ReactNode }) {
   const { account } = await requireLuther()
-  const [apps, { canManageCatalog }] = await Promise.all([getAccessibleApps(), getLutherPermissions()])
+  const [apps, { canManageCatalog, canManageTeam }] = await Promise.all([getAccessibleApps(), getLutherPermissions()])
 
   return (
     <AppShell
       currentApp="luther"
-      sidebar={<LutherSidebar canManageCatalog={canManageCatalog} />}
+      sidebar={<LutherSidebar canManageCatalog={canManageCatalog} canManageTeam={canManageTeam} />}
       user={{ name: account.name, email: account.email }}
       apps={apps}
     >

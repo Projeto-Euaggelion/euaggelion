@@ -292,6 +292,15 @@ pré-visualização (etapa 7).
 - `supabase/config.toml` (CLI) já vem com `enable_signup = false`.
 - Primeiro admin do Luther (SQL editor), depois de criar a conta:
   `insert into public.app_memberships (user_id, app, role) select id, 'luther', 'admin' from public.profiles where email = '...';`
+  Depois disso, a equipe é gerenciada em `/luther/admin/users`.
+- **E-mail de convite** (painel do Supabase → Authentication → Emails → *Invite user*): o link
+  precisa passar pelo callback do servidor, que usa `token_hash` (o link padrão traz os tokens no
+  `#fragmento`, que o servidor não lê). Use
+  `{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=invite&next=/luther` e inclua
+  `EUAGGELION_URL/auth/callback` nas *Redirect URLs*. (O link mágico do `/login` não precisa
+  disso: ele sai do cliente SSR com PKCE e volta com `?code=`.)
+  O convidado entra pelo link e, nas próximas vezes, usa o link mágico do `/login` (ainda não há
+  tela para definir senha).
 
 ### Migrations (`supabase/migrations`)
 
@@ -308,6 +317,7 @@ pré-visualização (etapa 7).
 | `…120800_segment_kind_attribute` | `segment_kind` ganha `attribute` (atributos traduzíveis) |
 | `…120900_works_management` | `create_work` (obra + v1 do original, atômico); nova versão do original sincroniza título/descrição da obra |
 | `…121000_version_contributors` | etapa em `segment_revisions`; `version_contributors()`; colaboradores congelados na publicação e expostos ao site |
+| `…121100_luther_admin_guard` | trigger: o Luther nunca fica sem admin ativo (rebaixar/desativar/remover o último é recusado) |
 
 **Regras aplicadas no banco:**
 - transições de etapa válidas e o papel exigido para cada uma;
@@ -316,6 +326,7 @@ pré-visualização (etapa 7).
 - segmento aprovado não aceita edição direta;
 - versões publicadas ou arquivadas ficam congeladas;
 - uma versão publicada e no máximo uma em andamento por tradução;
+- o Luther sempre tem ao menos um admin ativo;
 - o histórico (revisões e `stage_events`) é gravado por trigger;
 - notificações de menção, resposta e thread resolvida (o envio por Mailgun lê `emailed_at is null`).
 
@@ -378,7 +389,7 @@ Os caminhos abaixo são relativos ao `basePath` `/luther`. O `/login` é o da zo
 /works/[workId]/[lang]/v/[version]/preview
 /works/[workId]/[lang]/compare?a=&b=       Diff entre versões
 /glossary
-/admin/users                               Equipe do Luther (memberships, via servidor)
+/admin/users                               Equipe do Luther (só admin; 404 para os demais)
 /settings
 
 POST /api/translate                        Segmento(s) → DeepSeek (SSE)
@@ -395,18 +406,30 @@ Convenções do app (etapa 4):
   - Devolvem `ActionState` (`error`, `fieldErrors`, `success`); erros do Postgres passam por
     `databaseErrorMessage`.
 - A visibilidade de botões usa `getLutherPermissions()`, que dá booleanos calculados no servidor
-  (`canManageCatalog`, `canStartTranslation`).
+  (`canManageCatalog`, `canStartTranslation`, `canManageTeam`).
 - **Formulários** usam `useFormAction` (`src/lib/use-form-action.ts`), não `<form action>`
   direto: o React 19 limparia os campos quando o servidor recusa os dados.
 - **Páginas:** o shell é estático e os dados ficam num componente async dentro de `<Suspense>`.
   - Ids da URL passam por `isUuid` antes de ir ao banco.
   - Links internos usam `next/link` (respeitam o basePath); `BreadcrumbLink` vai com `asChild`.
 
+**Equipe (`/admin/users`):**
+- A leitura (`src/lib/data/team.ts`) e as ações usam `createSupabaseAdminClient()` porque
+  `app_memberships` não é exposta à API; por isso a página confere `role === "admin"` (senão
+  `notFound()`) e cada ação chama `requireLuther(["admin"])` antes de tocar no banco.
+- **Convidar:** se o e-mail já tem conta no Euaggelion, só cria/reativa a membership; senão,
+  `auth.admin.inviteUserByEmail` (com `name` no `user_metadata` e retorno para `/luther`) e a
+  membership com `granted_by`.
+- **Editar** nome e papel; **desativar/reativar** (`active`, sem apagar histórico nem créditos);
+  **reenviar convite** para quem foi convidado e nunca entrou (`invited_at` sem `last_sign_in_at`).
+- Ninguém muda o próprio papel nem desativa a própria conta (checado na ação); o banco garante o
+  último admin.
+
 ## Roadmap
 
 1. ~~Setup do monorepo + shadcn + UI compartilhada (shell e layout do editor)~~
-2. ~~Schema e RLS (migrations + testes); login único, multi-zones e autorização no servidor~~
-   (pendente: `/admin/users` para gerenciar a equipe)
+2. ~~Schema e RLS (migrations + testes); login único, multi-zones e autorização no servidor;
+   `/admin/users` (equipe)~~
 3. ~~Parser/segmentador MDX, com testes~~
 4. ~~CRUD de obras + importação (incluindo o acervo de `content/`)~~
 5. Editor + DeepSeek
