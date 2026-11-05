@@ -8,3 +8,6 @@ dist
 .DS_Store
 supabase/.temp
 !.env.example
+
+# graphify: grafo gerado localmente (pnpm graph)
+graphify-out/

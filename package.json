@@ -10,7 +10,8 @@
     "test": "turbo run test",
     "dev:luther": "pnpm --filter luther dev",
     "import:convert": "pnpm --filter @euaggelion/importer convert --",
-    "import:apply": "pnpm --filter @euaggelion/importer apply --"
+    "import:apply": "pnpm --filter @euaggelion/importer apply --",
+    "graph": "GRAPHIFY_BACKEND=none graphify update ."
   },
   "devDependencies": {
     "turbo": "^2",

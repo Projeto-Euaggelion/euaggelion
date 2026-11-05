@@ -1,0 +1,12 @@
+# Acervo legado e MDX gerado pelo importador: texto, não código (milhares de arquivos)
+content/
+
+# Gerados / dependências
+node_modules/
+.next/
+.turbo/
+dist/
+coverage/
+graphify-out/
+*.tsbuildinfo
+pnpm-lock.yaml

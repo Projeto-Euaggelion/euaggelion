@@ -412,3 +412,25 @@ Convenções do app (etapa 4):
 5. Editor + DeepSeek
 6. Fluxo de etapas + comentários
 7. Versionamento, publicação e exportação
+
+## graphify (grafo de conhecimento do código)
+
+O [graphify](https://github.com/safishamsi/graphify) indexa o código (TS/TSX, SQL das migrations,
+configs) num grafo consultável em `graphify-out/`. O grafo é feito localmente com tree-sitter,
+sem LLM e sem chave de API.
+
+- **Instalação (uma vez por máquina):** `uv tool install "graphifyy[sql]"` (ou `pipx install
+  "graphifyy[sql]"`; o pacote PyPI tem dois "y"; o extra `sql` indexa as migrations).
+- **Gerar/atualizar o grafo:** `pnpm graph` (= `graphify update .`, segundos). `graphify-out/` não
+  vai para o git; cada um gera o seu. Opcional: `graphify hook install` atualiza após commit/checkout.
+- **Fora do grafo** (`.graphifyignore`): `content/` (acervo, texto e não código) e artefatos gerados.
+- Projeto: skill em `.claude/skills/graphify/` (`/graphify`) e hooks `PreToolUse` em
+  `.claude/settings.json` que lembram de consultar o grafo antes de buscas e leituras (só aviso,
+  sem bloqueio). Sem o `graphify` instalado, os hooks dão erro não bloqueante.
+
+Regras:
+- When graphify-out/graph.json exists, run `graphify query "<question>"` before your first grep, search or source-file read for a codebase question, and put this rule in every subagent prompt that explores code. Read raw files only for lines the graph or an earlier read already located. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
+- O grafo casa termos com nomes de símbolos e arquivos (em inglês): pergunte com identificadores (`version_contributors`, `getVersionContributors`), não com frases em português.
+- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
+- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
+- After modifying code, run `pnpm graph` (`graphify update .`) to keep the graph current (AST-only, no API cost).
