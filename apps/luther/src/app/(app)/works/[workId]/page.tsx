@@ -12,13 +12,14 @@ import { Skeleton } from "@euaggelion/ui/components/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@euaggelion/ui/components/table"
 import { AppHeader } from "@euaggelion/ui/shell/app-header"
 
+import { ContributorList } from "@/components/catalog/contributors"
 import { EmptyState } from "@/components/catalog/empty-state"
 import { PageBreadcrumb } from "@/components/catalog/page-breadcrumb"
 import { StartTranslationDialog } from "@/components/catalog/start-translation-dialog"
 import { VersionStatusBadge, WorkStatusBadge } from "@/components/catalog/status-badges"
 import { WorkEditDialog } from "@/components/catalog/work-edit-dialog"
 import { getLutherPermissions } from "@/lib/access"
-import { getSourceVersions, getTranslationOverview, getWork, listAuthors } from "@/lib/data/catalog"
+import { getSourceVersions, getTranslationOverview, getVersionContributors, getWork, listAuthors } from "@/lib/data/catalog"
 import { formatDateTime, formatWorkDate, languageLabel, WORK_TYPE_LABELS, type WorkStatus } from "@/lib/format"
 import { isUuid } from "@/lib/ids"
 
@@ -45,7 +46,10 @@ async function WorkContent({ params }: { params: Promise<{ workId: string }> }) 
     getLutherPermissions(),
   ])
   if (!work) notFound()
-  const authors = permissions.canManageCatalog ? await listAuthors() : []
+  const [authors, contributors] = await Promise.all([
+    permissions.canManageCatalog ? listAuthors() : Promise.resolve([]),
+    getVersionContributors(translations.map((t) => ({ id: t.id!, status: t.status ?? "" }))),
+  ])
 
   const latestSource = sources[0]
   const languages = [...new Set(translations.map((t) => t.language).filter((l): l is string => !!l))]
@@ -142,6 +146,7 @@ async function WorkContent({ params }: { params: Promise<{ workId: string }> }) 
                     <TableHead>Status</TableHead>
                     <TableHead className="w-48">Aprovados</TableHead>
                     <TableHead className="hidden md:table-cell">Threads abertas</TableHead>
+                    <TableHead className="hidden lg:table-cell">Colaboradores</TableHead>
                     <TableHead />
                   </TableRow>
                 </TableHeader>
@@ -172,6 +177,9 @@ async function WorkContent({ params }: { params: Promise<{ workId: string }> }) 
                           </div>
                         </TableCell>
                         <TableCell className="hidden tabular-nums md:table-cell">{t.open_target_threads ?? 0}</TableCell>
+                        <TableCell className="hidden max-w-72 lg:table-cell">
+                          <ContributorList contributors={contributors.get(t.id!) ?? []} />
+                        </TableCell>
                         <TableCell className="text-right">
                           <Button variant="ghost" size="sm" asChild>
                             <Link href={`/works/${work.id}/${t.language}/v/${t.version}`}>Abrir</Link>

@@ -157,8 +157,28 @@ Autor
 | título, descrição | obra + versão da tradução (segmentos `title` / `description`) | sim |
 | data | obra, precisão variável (`1857`, `1857-03`, `1857-03-15`) | não |
 | fonte | obra | não |
-| créditos | obra (edição em inglês) + versão da tradução (tradutor/revisor) | — |
+| créditos | obra (edição em inglês) + versão da tradução (`credits`, texto livre) | — |
+| colaboradores | versão da tradução: tradutores e revisores, derivados do histórico (ver abaixo) | — |
 | status | obra (`draft`, `active`, `archived`); versão (`in_progress`, `published`, `archived`) | — |
+
+### Colaboradores da versão
+
+Quem traduziu e revisou faz parte dos metadados da versão publicada. A lista é **derivada do que
+cada pessoa fez**, não do papel da conta:
+- **tradutor**: editou o texto (à mão ou aplicando sugestão da IA) com o segmento em `original` ou
+  `translation`;
+- **revisor**: editou o texto em `review`/`discussion`/`approved`, ou fez uma transição reservada a
+  revisores (aprovar, devolver, fechar discussão, reabrir);
+- texto copiado da versão anterior (modo `copy`) mantém o crédito dos tradutores de origem.
+  Hoje isso vale para todos os tradutores da versão anterior, mesmo os de segmentos que mudaram;
+  as revisões antigas não contam, porque a nova versão é revisada de novo.
+
+Fontes: `segment_revisions` (com a etapa no momento da edição) e `stage_events`. Em andamento, a
+lista vem de `version_contributors(version_id)`. Na publicação, `publish_translation_version` a
+congela em `translation_versions.contributors` (`[{ name, roles }]`, sem ids), e o site a lê em
+`published_translations.contributors`. Na etapa 7, o MDX publicado leva a mesma lista no
+frontmatter (`translation.contributors`). `translator_id`/`reviewer_id` ficam como responsáveis
+designados (opcionais), e `credits` como texto livre adicional.
 
 ## Fluxo editorial (por segmento)
 
@@ -287,6 +307,7 @@ pré-visualização (etapa 7).
 | `…120700_public_site` | acesso anônimo ao que foi publicado + view `published_translations` |
 | `…120800_segment_kind_attribute` | `segment_kind` ganha `attribute` (atributos traduzíveis) |
 | `…120900_works_management` | `create_work` (obra + v1 do original, atômico); nova versão do original sincroniza título/descrição da obra |
+| `…121000_version_contributors` | etapa em `segment_revisions`; `version_contributors()`; colaboradores congelados na publicação e expostos ao site |
 
 **Regras aplicadas no banco:**
 - transições de etapa válidas e o papel exigido para cada uma;
@@ -305,7 +326,9 @@ pré-visualização (etapa 7).
   e envia os segmentos;
 - `create_translation_version(work_id, language, mode 'copy'|'blank', source_version_id?)`;
 - `apply_ai_translation(segment_id, text, model, tokens?)`: grava a revisão com origem `ai`;
-- `publish_translation_version(version_id, mdx)`: o app reconstrói o MDX e o envia.
+- `version_contributors(version_id)`: tradutores e revisores da versão (nome, papéis, contagens);
+- `publish_translation_version(version_id, mdx)`: o app reconstrói o MDX e o envia; congela os
+  colaboradores.
 
 **Testes:** `pnpm --filter @euaggelion/db test:db` aplica as migrations num Postgres em memória
 (PGlite, com stub de `auth` e dos papéis do Supabase) e verifica RLS e regras. Rode sempre que
@@ -325,9 +348,9 @@ source_segments       id, source_version_id, position, kind, text, ast_path
 translations          id, work_id, language, published_version_id   UNIQUE(work_id, language)
 translation_versions  id, translation_id, version, source_version_id, based_on_version_id,
                       status, credits, translator_id, reviewer_id, mdx (publicado),
-                      created_by, published_at
+                      contributors (congelado na publicação), created_by, published_at
 segments              id, translation_version_id, source_segment_id, text, stage, updated_by
-segment_revisions     id, segment_id, text, origin, model, tokens, author_id
+segment_revisions     id, segment_id, text, origin, model, tokens, author_id, stage
 comment_threads       id, translation_version_id, segment_id, side (source|target), quote,
                       prefix, suffix, start_offset, end_offset, detached, status (open|resolved),
                       created_by, resolved_by, resolved_at

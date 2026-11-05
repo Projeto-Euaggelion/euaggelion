@@ -134,10 +134,16 @@ ov.can_publish && ov.open_source_threads === 1 && !ov.is_outdated ? ok('overview
 await expectErr('status não muda por update direto', 'admin', `update public.translation_versions set status='published' where id='${v1}'`, 'publish_translation_version')
 await expectErr('tradutor não publica', 'tr', `select public.publish_translation_version('${v1}', '# A Imutabilidade')`, 'revisores publicam')
 await expectOk('revisor publica v1', 'rev', `select public.publish_translation_version('${v1}', '---\ntitle: A Imutabilidade de Deus\n---\n# A Imutabilidade de Deus')`)
+const snap = (await db.query(`select contributors from public.translation_versions where id=$1`, [v1])).rows[0].contributors
+JSON.stringify(snap) === JSON.stringify([{ name: 'Davi', roles: ['translator'] }, { name: 'rev', roles: ['translator', 'reviewer'] }])
+  ? ok('publicação congela os colaboradores (tradução por IA/edição e revisão, pelo que cada um fez)') : bad('contributors v1', JSON.stringify(snap))
+await expectErr('colaboradores não mudam por update direto', 'admin', `update public.translation_versions set contributors='[]' where id='${v1}'`, 'publish_translation_version')
+await expectErr('usuário fora do Luther não consulta colaboradores', 'reader', `select * from public.version_contributors('${v1}')`, 'restrito')
 await expectErr('versão publicada é congelada', 'admin', `update public.segments set stage='review' where id='${S[0]}'`, 'não está em andamento')
 
 console.log('\nLeitura pública')
-const pub = await expectOk('anon lê published_translations', 'anon', `select work_slug, author_name, language, version, mdx from public.published_translations`)
+const pub = await expectOk('anon lê published_translations', 'anon', `select work_slug, author_name, language, version, mdx, contributors from public.published_translations`)
+pub?.rows[0]?.contributors?.length === 2 && !JSON.stringify(pub.rows[0].contributors).includes('0000') ? ok('site recebe os colaboradores (só nome e papéis, sem ids)') : bad('contributors públicos', JSON.stringify(pub?.rows[0]?.contributors))
 pub?.rows.length === 1 && pub.rows[0].version === 1 ? ok('site vê a v1 publicada') : bad('published_translations', JSON.stringify(pub?.rows))
 await expectErr('anon não lê segmentos', 'anon', `select * from public.segments`, 'permission denied')
 await expectErr('anon não lê colunas internas da versão', 'anon', `select created_by from public.translation_versions`, 'permission denied')
@@ -160,6 +166,21 @@ v2segs[0].stage === 'review' && v2segs[0].text && v2segs[1].stage === 'original'
   ? ok('cópia reaproveita segmentos inalterados (review) e zera os alterados (original)') : bad('cópia', JSON.stringify(v2segs))
 const pub2 = (await as('anon', `select version from public.published_translations`)).rows
 pub2.length === 1 && pub2[0].version === 1 ? ok('site continua na v1 enquanto a v2 está em andamento') : bad('pub após v2', JSON.stringify(pub2))
+
+// --- Colaboradores com texto copiado --------------------------------------------
+console.log('\nColaboradores (versão copiada)')
+const S2 = Object.fromEntries((await db.query(`select s.id, ss.position from public.segments s join public.source_segments ss on ss.id = s.source_segment_id where s.translation_version_id = $1`, [v2])).rows.map(r => [r.position, r.id]))
+await expectOk('admin traduz o segmento alterado da v2', 'admin', `update public.segments set text='Já foi dito por alguém (corrigido)...' where id='${S2[1]}'; update public.segments set stage='review' where id='${S2[1]}';`)
+const live = (await as('tr', `select name, roles, translations, reviews from public.version_contributors('${v2}')`)).rows
+JSON.stringify(live.map(c => [c.name, c.roles])) === JSON.stringify([['Davi', ['translator']], ['Admin', ['translator']], ['rev', ['translator']]])
+  ? ok('em andamento: tradutores da v1 mantêm o crédito do texto copiado; revisões da v1 não contam') : bad('live v2', JSON.stringify(live))
+await expectOk('revisor aprova a v2', 'rev', `update public.segments set stage='approved' where translation_version_id='${v2}'`)
+await expectOk('revisor publica a v2', 'rev', `select public.publish_translation_version('${v2}', '# v2')`)
+const snap2 = (await as('anon', `select version, contributors from public.published_translations`)).rows[0]
+snap2.version === 2 && JSON.stringify(snap2.contributors) === JSON.stringify([{ name: 'Davi', roles: ['translator'] }, { name: 'rev', roles: ['translator', 'reviewer'] }, { name: 'Admin', roles: ['translator'] }])
+  ? ok('v2 publicada com tradutores herdados + quem traduziu e revisou a v2') : bad('contributors v2', JSON.stringify(snap2))
+const v1after = (await db.query(`select status, jsonb_array_length(contributors) as n from public.translation_versions where id=$1`, [v1])).rows[0]
+v1after.status === 'archived' && v1after.n === 2 ? ok('v1 arquivada mantém os próprios colaboradores') : bad('v1 arquivada', JSON.stringify(v1after))
 
 // --- Gestão de obras -----------------------------------------------------------
 console.log('\nGestão de obras')

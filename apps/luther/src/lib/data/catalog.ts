@@ -139,3 +139,38 @@ export async function getAuthor(slug: string) {
   if (error) fail("Falha ao carregar o autor", error)
   return data
 }
+
+export interface Contributor {
+  name: string
+  roles: ("translator" | "reviewer")[]
+}
+
+/**
+ * Colaboradores de cada versão. Publicadas/arquivadas: a lista congelada na publicação.
+ * Em andamento: calculada agora a partir do histórico (`version_contributors`).
+ */
+export async function getVersionContributors(versions: { id: string; status: string }[]) {
+  const supabase = await createSupabaseServerClient()
+  const result = new Map<string, Contributor[]>()
+
+  const frozen = versions.filter((v) => v.status !== "in_progress").map((v) => v.id)
+  if (frozen.length) {
+    const { data, error } = await supabase.from("translation_versions").select("id, contributors").in("id", frozen)
+    if (error) fail("Falha ao carregar os colaboradores", error)
+    for (const row of data) result.set(row.id, (row.contributors ?? []) as unknown as Contributor[])
+  }
+
+  await Promise.all(
+    versions
+      .filter((v) => v.status === "in_progress")
+      .map(async (v) => {
+        const { data, error } = await supabase.rpc("version_contributors", { p_version_id: v.id })
+        if (error) fail("Falha ao carregar os colaboradores", error)
+        result.set(
+          v.id,
+          data.map((c) => ({ name: c.name, roles: c.roles as Contributor["roles"] })),
+        )
+      }),
+  )
+  return result
+}

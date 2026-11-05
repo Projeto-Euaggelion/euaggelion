@@ -177,14 +177,14 @@ isOneToOne: false
                   ]
                 },"segment_revisions": {
                   Row: {
-                    "author_id": string | null,"created_at": string,"id": string,"model": string | null,"origin": Database["public"]['Enums']["revision_origin"],"segment_id": string,"text": string,"tokens": number | null
+                    "author_id": string | null,"created_at": string,"id": string,"model": string | null,"origin": Database["public"]['Enums']["revision_origin"],"segment_id": string,"stage": Database["public"]['Enums']["segment_stage"] | null,"text": string,"tokens": number | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "author_id"?: string | null,"created_at"?: string,"id"?: string,"model"?: string | null,"origin": Database["public"]['Enums']["revision_origin"],"segment_id": string,"text": string,"tokens"?: number | null
+                    "author_id"?: string | null,"created_at"?: string,"id"?: string,"model"?: string | null,"origin": Database["public"]['Enums']["revision_origin"],"segment_id": string,"stage"?: Database["public"]['Enums']["segment_stage"] | null,"text": string,"tokens"?: number | null
                   }
                   Update: {
-                    "author_id"?: string | null,"created_at"?: string,"id"?: string,"model"?: string | null,"origin"?: Database["public"]['Enums']["revision_origin"],"segment_id"?: string,"text"?: string,"tokens"?: number | null
+                    "author_id"?: string | null,"created_at"?: string,"id"?: string,"model"?: string | null,"origin"?: Database["public"]['Enums']["revision_origin"],"segment_id"?: string,"stage"?: Database["public"]['Enums']["segment_stage"] | null,"text"?: string,"tokens"?: number | null
                   }
                   Relationships: [
                     {
@@ -325,14 +325,14 @@ isOneToOne: false
                   ]
                 },"translation_versions": {
                   Row: {
-                    "based_on_version_id": string | null,"created_at": string,"created_by": string | null,"credits": string | null,"id": string,"mdx": string | null,"published_at": string | null,"reviewer_id": string | null,"source_version_id": string,"status": Database["public"]['Enums']["version_status"],"translation_id": string,"translator_id": string | null,"updated_at": string,"version": number
+                    "based_on_version_id": string | null,"contributors": NonNullable<Json>,"created_at": string,"created_by": string | null,"credits": string | null,"id": string,"mdx": string | null,"published_at": string | null,"reviewer_id": string | null,"source_version_id": string,"status": Database["public"]['Enums']["version_status"],"translation_id": string,"translator_id": string | null,"updated_at": string,"version": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "based_on_version_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"credits"?: string | null,"id"?: string,"mdx"?: string | null,"published_at"?: string | null,"reviewer_id"?: string | null,"source_version_id": string,"status"?: Database["public"]['Enums']["version_status"],"translation_id": string,"translator_id"?: string | null,"updated_at"?: string,"version": number
+                    "based_on_version_id"?: string | null,"contributors"?: NonNullable<Json>,"created_at"?: string,"created_by"?: string | null,"credits"?: string | null,"id"?: string,"mdx"?: string | null,"published_at"?: string | null,"reviewer_id"?: string | null,"source_version_id": string,"status"?: Database["public"]['Enums']["version_status"],"translation_id": string,"translator_id"?: string | null,"updated_at"?: string,"version": number
                   }
                   Update: {
-                    "based_on_version_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"credits"?: string | null,"id"?: string,"mdx"?: string | null,"published_at"?: string | null,"reviewer_id"?: string | null,"source_version_id"?: string,"status"?: Database["public"]['Enums']["version_status"],"translation_id"?: string,"translator_id"?: string | null,"updated_at"?: string,"version"?: number
+                    "based_on_version_id"?: string | null,"contributors"?: NonNullable<Json>,"created_at"?: string,"created_by"?: string | null,"credits"?: string | null,"id"?: string,"mdx"?: string | null,"published_at"?: string | null,"reviewer_id"?: string | null,"source_version_id"?: string,"status"?: Database["public"]['Enums']["version_status"],"translation_id"?: string,"translator_id"?: string | null,"updated_at"?: string,"version"?: number
                   }
                   Relationships: [
                     {
@@ -466,7 +466,7 @@ isOneToOne: false
           Views: {
             "published_translations": {
                   Row: {
-                    "author_name": string,"author_slug": string,"date_precision": Database["public"]['Enums']["date_precision"] | null,"date_text": string | null,"language": string,"mdx": string | null,"original_credits": string | null,"original_description": string | null,"original_title": string,"published_at": string | null,"source": string | null,"translation_credits": string | null,"translation_id": string,"version": number,"version_id": string,"work_id": string,"work_slug": string,"work_type": Database["public"]['Enums']["work_type"]
+                    "author_name": string,"author_slug": string,"contributors": NonNullable<Json>,"date_precision": Database["public"]['Enums']["date_precision"] | null,"date_text": string | null,"language": string,"mdx": string | null,"original_credits": string | null,"original_description": string | null,"original_title": string,"published_at": string | null,"source": string | null,"translation_credits": string | null,"translation_id": string,"version": number,"version_id": string,"work_id": string,"work_slug": string,"work_type": Database["public"]['Enums']["work_type"]
                   }
                   ComputedFields: never
                   Relationships: [
@@ -554,6 +554,11 @@ isOneToOne: false
                            },
 "publish_translation_version":
 { Args: { "p_mdx": string,"p_version_id": string }; Returns: undefined
+                           },
+"version_contributors":
+{ Args: { "p_version_id": string }; Returns: {
+              "name": string,"reviews": number,"roles": (string)[],"translations": number,"user_id": string
+            }[]
                            }
           }
           Enums: {
