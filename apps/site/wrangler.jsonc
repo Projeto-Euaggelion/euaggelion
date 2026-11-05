@@ -1,0 +1,36 @@
+// Worker do site em produção: zona principal (/, /login, /auth/*, /sem-acesso). Adaptado pelo OpenNext.
+// Build e deploy: pnpm --filter site cf:deploy  (ver "Deploy (Cloudflare Workers)" no CLAUDE.md)
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "euaggelion-site",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-10-20",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  // Sem isto o esbuild injeta __name() em funções que o Next serializa em <script> (ex.: next-themes),
+  // e o navegador quebra com "__name is not defined"
+  "keep_names": false,
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "services": [
+    // Referência ao próprio Worker, exigida pelo OpenNext (o nome precisa ser igual a "name")
+    { "binding": "WORKER_SELF_REFERENCE", "service": "euaggelion-site" }
+  ],
+  // Só responde pelo domínio do Euaggelion: sem endereço público *.workers.dev nem URLs de preview
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [
+    // Tudo no domínio, menos o que tiver uma rota mais específica (ex.: /luther*, no Worker do Luther)
+    { "pattern": "euaggelion.com.br/*", "zone_name": "euaggelion.com.br" }
+  ],
+  "observability": { "enabled": true },
+  // Variáveis lidas em tempo de execução. As NEXT_PUBLIC_* e as usadas no next.config precisam
+  // existir também no build (ver CLAUDE.md). Segredos: wrangler secret put <NOME>.
+  "vars": {
+    "EUAGGELION_URL": "https://euaggelion.com.br",
+    // Apps ainda fora do ar: somem do trilho/da home (separe por vírgula; vazio = todos visíveis).
+    // Ao lançar o Luther, remova "luther" daqui e ative as rotas no wrangler.jsonc dele.
+    "EUAGGELION_HIDDEN_APPS": "luther"
+  }
+}

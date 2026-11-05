@@ -1,0 +1,3 @@
+# Copie para .dev.vars (ignorado pelo git) para rodar o Worker localmente: pnpm cf:preview
+# Em produção, estes valores são segredos do Worker: wrangler secret put <NOME>
+SUPABASE_SECRET_KEY=

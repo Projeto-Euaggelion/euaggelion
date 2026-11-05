@@ -11,3 +11,9 @@ supabase/.temp
 
 # graphify: grafo gerado localmente (pnpm graph)
 graphify-out/
+
+# Cloudflare (OpenNext / wrangler)
+.open-next
+.wrangler
+.dev.vars*
+!.dev.vars.example

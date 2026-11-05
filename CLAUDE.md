@@ -20,6 +20,7 @@ textos de autores clássicos do cristianismo (sermões, artigos e comentários).
 - **Tiptap (ProseMirror)** no editor de tradução (etapa 5)
 - **Mailgun** para e-mails transacionais (notificações)
 - **pnpm workspaces** + **Turborepo**
+- **Cloudflare Workers** em produção, um Worker por app (OpenNext; ver "Deploy")
 
 > A versão do Next.js usada aqui tem mudanças incompatíveis com versões anteriores. Consulte
 > `apps/luther/AGENTS.md` e `node_modules/next/dist/docs/` antes de escrever código.
@@ -44,8 +45,10 @@ content/         Acervo legado de textos-fonte (ver abaixo)
 **Multi-zones (Next.js):** todos os apps são servidos no **mesmo domínio**, cada um no seu
 caminho.
 - `apps/site` é a zona principal. Ela serve `/`, `/login`, `/auth/callback`, `/auth/signout` e
-  `/sem-acesso`, e encaminha os caminhos das outras zonas por `rewrites` (ex.: `/luther/*` →
-  `LUTHER_ORIGIN`).
+  `/sem-acesso`.
+- **Em produção** cada zona é um Worker com a sua rota no domínio (`/luther*` → Worker do
+  Luther; o resto → site). **Em dev/testes** o site encaminha `/luther/*` para `LUTHER_ORIGIN` por
+  `rewrites` (padrão `http://localhost:3001` em `next dev`; no build, só se a variável existir).
 - Cada app roda com `basePath` igual ao seu caminho (ex.: `basePath: "/luther"`). Em dev: site na
   porta 3000 e Luther na 3001; acesse sempre pela 3000.
 - Links entre zonas usam `<a>` (navegação "hard"), não `<Link>`.
@@ -77,8 +80,8 @@ ativa. Os papéis do Luther são `admin`, `translator` e `reviewer`.
 - **O client nunca recebe papéis nem regras.** Ele recebe só dados de exibição (nome, e-mail) e a
   lista de apps que pode abrir. Quando a UI precisa de algo como "pode aprovar", o servidor
   calcula um booleano e revalida na ação.
-- Com Cache Components, a leitura da sessão fica dentro de `<Suspense>`, e
-  `createSupabaseServerClient()` chama `connection()`.
+- A leitura da sessão fica dentro de `<Suspense>`, e `createSupabaseServerClient()` chama
+  `connection()` (padrão do Cache Components, hoje desligado; ver "Deploy").
 - O parâmetro `next` do login passa por `safeNextPath` (só caminhos do próprio domínio; evita open
   redirect).
 
@@ -409,7 +412,8 @@ Convenções do app (etapa 4):
   (`canManageCatalog`, `canStartTranslation`, `canManageTeam`).
 - **Formulários** usam `useFormAction` (`src/lib/use-form-action.ts`), não `<form action>`
   direto: o React 19 limparia os campos quando o servidor recusa os dados.
-- **Páginas:** o shell é estático e os dados ficam num componente async dentro de `<Suspense>`.
+- **Páginas:** o shell fica fora e os dados num componente async dentro de `<Suspense>` (streaming;
+  é o que o Cache Components exige, se for religado).
   - Ids da URL passam por `isUuid` antes de ir ao banco.
   - Links internos usam `next/link` (respeitam o basePath); `BreadcrumbLink` vai com `asChild`.
 
@@ -424,6 +428,52 @@ Convenções do app (etapa 4):
   **reenviar convite** para quem foi convidado e nunca entrou (`invited_at` sem `last_sign_in_at`).
 - Ninguém muda o próprio papel nem desativa a própria conta (checado na ação); o banco garante o
   último admin.
+
+## Deploy (Cloudflare Workers)
+
+Cada app é um Worker, gerado pelo adaptador OpenNext (`@opennextjs/cloudflare` 1.20 + `wrangler`).
+Arquivos por app: `wrangler.jsonc` (nome, rotas, variáveis), `open-next.config.ts` (cache) e os
+scripts `cf:build`, `cf:preview` (roda o Worker localmente no `workerd`), `cf:deploy` e `cf:typegen`.
+
+**Rotas** (zona `euaggelion.com.br`, que precisa estar na Cloudflare com o DNS do domínio
+"proxied"; sem servidor de origem, um registro `AAAA @ 100::` proxied basta):
+
+| Worker | Rotas | Observação |
+|---|---|---|
+| `euaggelion-site` | `euaggelion.com.br/*` | zona principal |
+| `euaggelion-luther` | `euaggelion.com.br/luther`, `euaggelion.com.br/luther/*` | a mais específica vence |
+
+`workers_dev` e `preview_urls` ficam desligados: os Workers só respondem pelo domínio.
+
+**Luther fora do ar:** não publique o Worker do Luther e deixe `EUAGGELION_HIDDEN_APPS=luther` no
+site (o app some do trilho e da home; `/luther` dá 404 no site). Para lançar:
+`pnpm --filter luther cf:deploy` e remova `luther` da variável.
+
+**Variáveis:**
+- **No build** (`cf:build` lê do ambiente): `NEXT_PUBLIC_SUPABASE_URL`,
+  `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (embutidas no código) e `EUAGGELION_URL` (o Luther a usa no
+  `next.config`). `LUTHER_ORIGIN` fica **vazia** em produção.
+- **Em tempo de execução** (`vars` do `wrangler.jsonc`): `EUAGGELION_URL`, `EUAGGELION_HIDDEN_APPS`.
+- **Segredos** (em cada `apps/<app>`): `pnpm exec wrangler secret put SUPABASE_SECRET_KEY` (depois,
+  `DEEPSEEK_API_KEY`, `MAILGUN_API_KEY`…). Localmente, `.dev.vars` (ver `.dev.vars.example`).
+
+**Como publicar:** `pnpm --filter site cf:deploy` (com `wrangler login`, ou `CLOUDFLARE_API_TOKEN`
+e `CLOUDFLARE_ACCOUNT_ID`), ou pelo **Workers Builds** (painel → Worker → Settings → Build:
+repositório, branch `main`, diretório raiz `apps/site`, build `pnpm cf:build`, deploy
+`pnpm exec opennextjs-cloudflare deploy`, variáveis de build acima).
+
+**Limitações e decisões (validadas com os e2e rodando nos Workers):**
+- **Cache Components desligado** (`cacheComponents`/`partialPrefetching`): com o OpenNext 1.20, as
+  páginas com renderização parcial travam no `workerd` ("Worker's code had hung"). As páginas
+  renderizam sob demanda. Para testar de novo: `NEXT_CACHE_COMPONENTS=1 pnpm cf:preview`.
+- `proxy.ts` em Node é "experimental" no OpenNext; funciona nos testes (sessão, redirecionamentos).
+- `keep_names: false` no wrangler: sem isso, scripts que o Next embute na página (next-themes)
+  quebram com `__name is not defined`.
+- `global_fetch_strictly_public`: o Worker só faz `fetch` para a internet pública (Supabase,
+  DeepSeek, Mailgun).
+- Cache incremental só de leitura (Workers Static Assets): não há ISR/revalidação. Quando as páginas
+  públicas das traduções precisarem, troque por R2 + tag cache em `open-next.config.ts`.
+- Tamanho (gzip): site ~1,5 MiB, Luther ~1,9 MiB; o plano gratuito aceita até 3 MiB por Worker.
 
 ## Roadmap
 

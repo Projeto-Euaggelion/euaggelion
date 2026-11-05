@@ -1,0 +1,34 @@
+// Worker do Luther em produção: zona /luther. Publicar este Worker = colocar o Luther no ar.
+// Build e deploy: pnpm --filter luther cf:deploy  (ver "Deploy (Cloudflare Workers)" no CLAUDE.md)
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "euaggelion-luther",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-10-20",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  // Sem isto o esbuild injeta __name() em funções que o Next serializa em <script> (ex.: next-themes),
+  // e o navegador quebra com "__name is not defined"
+  "keep_names": false,
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "services": [
+    // Referência ao próprio Worker, exigida pelo OpenNext (o nome precisa ser igual a "name")
+    { "binding": "WORKER_SELF_REFERENCE", "service": "euaggelion-luther" }
+  ],
+  // Só responde pelo domínio do Euaggelion: sem endereço público *.workers.dev nem URLs de preview
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [
+    // A regra mais específica vence: estas vão para o Luther, o resto do domínio para o site.
+    { "pattern": "euaggelion.com.br/luther", "zone_name": "euaggelion.com.br" },
+    { "pattern": "euaggelion.com.br/luther/*", "zone_name": "euaggelion.com.br" }
+  ],
+  "observability": { "enabled": true },
+  // Variáveis lidas em tempo de execução. As NEXT_PUBLIC_* e as usadas no next.config precisam
+  // existir também no build (ver CLAUDE.md). Segredos: wrangler secret put <NOME>.
+  "vars": {
+    "EUAGGELION_URL": "https://euaggelion.com.br"
+  }
+}

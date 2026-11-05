@@ -72,12 +72,21 @@ export async function getAppRole<A extends EuaggelionAppId>(app: A): Promise<Rol
   return (memberships.get(app) as RoleOf<A> | undefined) ?? null
 }
 
-/** Apps que a conta atual pode abrir (públicos + aqueles em que tem membership). */
+/**
+ * Apps ainda fora do ar neste ambiente (EUAGGELION_HIDDEN_APPS, separados por vírgula).
+ * Ex.: em produção, "luther" enquanto o Luther não é lançado. Vazio = todos visíveis.
+ */
+function hiddenApps(): Set<string> {
+  return new Set((process.env.EUAGGELION_HIDDEN_APPS ?? "").split(",").map((s) => s.trim()).filter(Boolean))
+}
+
+/** Apps que a conta atual pode abrir (públicos + aqueles em que tem membership), menos os ocultos. */
 export async function getAccessibleApps(): Promise<EuaggelionAppId[]> {
   const account = await getAccount()
   const memberships = account ? await getMemberships(account.id) : new Map()
+  const hidden = hiddenApps()
   return EUAGGELION_APP_IDS.filter(
-    (id) => EUAGGELION_APP_CONFIG[id].access === "public" || memberships.has(id),
+    (id) => !hidden.has(id) && (EUAGGELION_APP_CONFIG[id].access === "public" || memberships.has(id)),
   )
 }
 
