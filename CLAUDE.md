@@ -34,6 +34,7 @@ apps/…           Demais apps (comentário, leitor, cronologia, atlas…), cada
 packages/ui      UI compartilhada: shadcn/ui, tema, tokens e o shell dos apps
 packages/auth    Autenticação/autorização (somente servidor): clientes Supabase, proxy, DAL
 packages/mdx     Convenções MDX: schema do frontmatter, parser/segmentador, componentes
+packages/bible   Núcleo bíblico: livros, versificação, nomes pt-BR/en, referências (sem dados)
 packages/db      Registro dos apps (ids, caminhos, acesso), tipos gerados do Supabase
 packages/importer Conversão do acervo legado (content/) para MDX e importação no Supabase
 supabase/        Migrations (Supabase CLI)
@@ -279,6 +280,34 @@ Componentes iniciais, compartilhados entre Luther (preview) e site via `packages
 O registro fica em `MDX_COMPONENTS` (`schema.ts`): o `kind` dos segmentos internos e os
 atributos traduzíveis (hoje, `source` de `<Quote>`). Os componentes React ficam para a
 pré-visualização (etapa 7).
+
+## Bíblia (`packages/bible`)
+
+Núcleo bíblico compartilhado (leitor, Luther, comentário, dicionário). Sem dependências e sem
+dados: roda no servidor e no client. Testes: `pnpm --filter @euaggelion/bible test`.
+Partes portadas de [trekhleb/bible-cross-references](https://github.com/trekhleb/bible-cross-references)
+(MIT; aviso em `packages/bible/LICENSE-THIRD-PARTY.md`).
+
+- **Livros:** os 66 do cânon protestante com ids **OSIS** (`Gen`, `1Cor`, `John`), testamento e os 10
+  gêneros (`getBookGenre`), na ordem canônica.
+- **Versificação canônica: KJV** (1.189 capítulos, 31.102 versículos). Todo versículo tem um índice
+  denso (`VerseIndex`, Gn 1:1 = 0, Jo 3:16 = 26.136). Dados bíblicos (versículos, referências
+  cruzadas) e URLs usam essa numeração, qualquer que seja a tradução exibida.
+- **Nomes** em pt-BR (`ptBooks`) e inglês (`enBooks`). A busca aceita abreviações e ignora acentos,
+  exceto onde o acento decide: `Jo` = João, `Jó` = Jó.
+- **Referências** (`BibleReference`: livro, capítulo, versículo opcional e fim opcional):
+  - `parseReference(texto, nomes)` lê `João 3:16`, `jo 3 16`, `1co13`, `Gn 1:31-2:3`, `Sl 23-24`,
+    `1º Coríntios 13:4-7`, `Jo 3,16` e confere se capítulo e versículo existem; os erros são dados
+    (`unknown-book`, `ambiguous-book`, `no-such-verse`, `invalid-range`…), não frases;
+  - `formatReference(ref, nomes, { abbreviated? })` → `João 3:16–18`, `Jo 3:16–18`, `Salmo 23`;
+  - `localizeReference("John 3:16-18", enBooks, ptBooks)` → `João 3:16–18` (para o `ref` de
+    `<Scripture>`: o original é lido em inglês e exibido em pt-BR);
+  - `referenceRange` / `referenceFromRange` convertem para índices e de volta;
+  - OSIS (`John.3.16`, `Rom.1.19-Rom.1.20`): `toOsis`, `parseOsis` e `parseOsisRange` (este aceita
+    intervalos entre livros, como no OpenBible).
+- Conferido com as 344.799 referências cruzadas do OpenBible: todas são lidas, exceto 5 que citam
+  `3John.1.15` (na KJV, parte de 1:14). A importação (etapa 2) remapeia esse versículo, como o
+  projeto original.
 
 ## Supabase
 
